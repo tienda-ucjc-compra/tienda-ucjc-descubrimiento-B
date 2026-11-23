@@ -7,6 +7,13 @@ export const EVENTO_SESION_CAMBIADA = 'ucjc:identidad:sesion-cambiada@1';
 
 const PRECIO_MAXIMO = { EUR: 60, USD: 70 };
 
+// Retardo (ms) de la búsqueda en vivo mientras el usuario escribe
+const RETARDO_BUSQUEDA = 250;
+
+// Minúsculas y sin tildes: "Equipación" y "equipacion" son lo mismo al buscar
+const normalizar = (texto) =>
+  String(texto).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+
 // Estilos del aviso de "producto añadido / eliminado"
 const ESTILOS_AVISO = `
   .aviso {
@@ -249,10 +256,21 @@ class UcjcDescubrimiento extends HTMLElement {
       this.actualizarModal();
     });
 
-    raiz.querySelector('.barra-busqueda').addEventListener('submit' , (e) => {
-      e.preventDefault();
-      this.estado.busqueda = e.target.q.value.trim().toLowerCase();
+    const formBusqueda = raiz.querySelector('.barra-busqueda');
+    const aplicarBusqueda = () => {
+      clearTimeout(this.temporizadorBusqueda);
+      this.estado.busqueda = normalizar(formBusqueda.q.value);
       this.pintarProductos();
+    };
+    // Búsqueda en vivo: filtra al escribir, con un pequeño retardo
+    formBusqueda.q.addEventListener('input', () => {
+      clearTimeout(this.temporizadorBusqueda);
+      this.temporizadorBusqueda = setTimeout(aplicarBusqueda, RETARDO_BUSQUEDA);
+    });
+    // Enter o botón "Buscar": aplica al instante
+    formBusqueda.addEventListener('submit', (e) => {
+      e.preventDefault();
+      aplicarBusqueda();
     });
 
     raiz.querySelector('.navegacion').addEventListener('click', (e) => {
@@ -388,6 +406,7 @@ class UcjcDescubrimiento extends HTMLElement {
   }
 
   limpiarFiltros() {
+    clearTimeout(this.temporizadorBusqueda);
     const { moneda, listaProductos, usuarioActivo } = this.estado;
     this.estado = { ...this.estadoInicial(), moneda, listaProductos, usuarioActivo, precioMax: PRECIO_MAXIMO[moneda] };
     const raiz = this.shadowRoot;
@@ -400,12 +419,20 @@ class UcjcDescubrimiento extends HTMLElement {
     this.cambiarCategoria('todo');
   }
 
+  // Busca por nombre o por nombre de categoría, sin distinguir tildes ni mayúsculas.
+  // Cada palabra escrita debe aparecer en alguno de los dos textos.
+  coincideBusqueda(producto, busqueda) {
+    const categoria = CATEGORIAS.find((c) => c.id === producto.categoria);
+    const texto = normalizar(`${producto.nombre} ${categoria ? categoria.nombre : ''}`);
+    return busqueda.split(/\s+/).every((palabra) => texto.includes(palabra));
+  }
+
   productosFiltrados() {
     const { busqueda, categoria, precioMax, tallas, orden, listaProductos } = this.estado;
     const lista = listaProductos.filter((p) =>
       (categoria === 'todo' || p.categoria === categoria) &&
       this.precioProducto(p) <= precioMax &&
-      (!busqueda || p.nombre.toLowerCase().includes(busqueda)) &&
+      (!busqueda || this.coincideBusqueda(p, busqueda)) &&
       (tallas.length === 0 || tallas.some((t) => p.tallas.includes(t)))
     );
 
