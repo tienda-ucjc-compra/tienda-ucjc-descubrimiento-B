@@ -50,6 +50,7 @@ class UcjcDescubrimiento extends HTMLElement {
   estadoInicial() {
     return {
       busqueda: '',
+      busquedaTexto: '',
       categoria: 'todo',
       precioMax: PRECIO_MAXIMO.EUR,
       moneda: 'EUR',
@@ -158,6 +159,8 @@ class UcjcDescubrimiento extends HTMLElement {
               <option value="nombre">Nombre (A-Z)</option>
             </select>
           </div>
+          <div class="chips" aria-label="Filtros activos" hidden></div>
+          <p class="nota-talla" hidden></p>
           <div class="rejilla"></div>
         </main>
       </div>
@@ -290,6 +293,7 @@ class UcjcDescubrimiento extends HTMLElement {
     const formBusqueda = raiz.querySelector('.barra-busqueda');
     const aplicarBusqueda = () => {
       clearTimeout(this.temporizadorBusqueda);
+      this.estado.busquedaTexto = formBusqueda.q.value.trim();
       this.estado.busqueda = normalizar(formBusqueda.q.value);
       this.pintarProductos();
     };
@@ -334,6 +338,11 @@ class UcjcDescubrimiento extends HTMLElement {
 
     raiz.querySelector('.limpiar').addEventListener('click', () => this.limpiarFiltros());
 
+    raiz.querySelector('.chips').addEventListener('click', (e) => {
+      const chip = e.target.closest('[data-quitar]');
+      if (chip) this.quitarFiltro(chip.dataset.quitar, chip.dataset.valor);
+    });
+
     // En móvil los filtros se pliegan detrás de este botón para ver antes los productos
     const botonFiltros = raiz.querySelector('.btn-filtros');
     botonFiltros.addEventListener('click', () => {
@@ -344,6 +353,10 @@ class UcjcDescubrimiento extends HTMLElement {
     raiz.querySelector('.rejilla').addEventListener('click', (e) => {
       const boton = e.target.closest('button[data-accion]');
       if (!boton) return;
+      if (boton.dataset.accion === 'limpiar') {
+        this.limpiarFiltros();
+        return;
+      }
       if (boton.dataset.accion === 'ver') {
         const producto = this.estado.listaProductos.find((p) => p.id === boton.dataset.id);
         if (producto) this.abrirModal(producto, boton);
@@ -418,14 +431,18 @@ class UcjcDescubrimiento extends HTMLElement {
     return busqueda.split(/\s+/).every((palabra) => texto.includes(palabra));
   }
 
-  productosFiltrados() {
-    const { busqueda, categoria, precioMax, tallas, orden, listaProductos } = this.estado;
-    const lista = listaProductos.filter((p) =>
-      (categoria === 'todo' || p.categoria === categoria) &&
+  // ¿Cumple el producto los filtros activos? Con ignorarTalla se salta solo el filtro de talla.
+  cumpleFiltros(p, ignorarTalla = false) {
+    const { busqueda, categoria, precioMax, tallas } = this.estado;
+    return (categoria === 'todo' || p.categoria === categoria) &&
       this.precioProducto(p) <= precioMax &&
       (!busqueda || this.coincideBusqueda(p, busqueda)) &&
-      (tallas.length === 0 || tallas.some((t) => p.tallas.includes(t)))
-    );
+      (ignorarTalla || tallas.length === 0 || tallas.some((t) => p.tallas.includes(t)));
+  }
+
+  productosFiltrados() {
+    const { orden, listaProductos } = this.estado;
+    const lista = listaProductos.filter((p) => this.cumpleFiltros(p));
 
     if (orden === 'precio-asc') lista.sort((a, b) => this.precioProducto(a) - this.precioProducto(b));
     if (orden === 'precio-desc') lista.sort((a, b) => this.precioProducto(b) - this.precioProducto(a));
@@ -439,6 +456,8 @@ class UcjcDescubrimiento extends HTMLElement {
     const raiz = this.shadowRoot;
     raiz.querySelector('.contador').textContent =
       `${lista.length} producto${lista.length === 1 ? '' : 's'}`;
+    this.pintarChips();
+    this.pintarNotaTalla();
 
     raiz.querySelector('.rejilla').innerHTML = lista.length
       ? lista.map((p) => `
@@ -464,7 +483,64 @@ class UcjcDescubrimiento extends HTMLElement {
             </div>
           </article>
         `).join('')
-      : `<p class="vacio">No hay productos con estos filtros.</p>`;
+      : `
+          <div class="vacio">
+            <p>No hay productos con estos filtros.</p>
+            <button type="button" class="btn-limpiar-vacio" data-accion="limpiar">Limpiar filtros</button>
+          </div>
+        `;
+  }
+
+  // Filtros activos como etiquetas que se quitan con un clic
+  pintarChips() {
+    const { busquedaTexto, categoria, precioMax, tallas, moneda } = this.estado;
+    const chips = [];
+    if (this.estado.busqueda) chips.push({ quitar: 'busqueda', texto: `Búsqueda: ${busquedaTexto}` });
+    if (categoria !== 'todo') chips.push({ quitar: 'categoria', texto: this.nombreCategoria(categoria) });
+    if (precioMax < PRECIO_MAXIMO[moneda]) chips.push({ quitar: 'precio', texto: `Hasta ${this.formatearPrecio(precioMax)}` });
+    tallas.forEach((t) => chips.push({ quitar: 'talla', valor: t, texto: `Talla ${t}` }));
+
+    const contenedor = this.shadowRoot.querySelector('.chips');
+    contenedor.hidden = chips.length === 0;
+    contenedor.innerHTML = chips.map((c) => `
+      <button type="button" class="chip" data-quitar="${c.quitar}" data-valor="${escapar(c.valor || '')}" aria-label="Quitar filtro: ${escapar(c.texto)}">
+        ${escapar(c.texto)} <span aria-hidden="true">&times;</span>
+      </button>
+    `).join('');
+  }
+
+  // Los productos sin tallas (talla única) desaparecen al filtrar por talla; se avisa en vez de ocultarlo en silencio
+  pintarNotaTalla() {
+    const nota = this.shadowRoot.querySelector('.nota-talla');
+    const ocultos = this.estado.tallas.length
+      ? this.estado.listaProductos.filter((p) => !p.tallas.length && this.cumpleFiltros(p, true)).length
+      : 0;
+    nota.hidden = ocultos === 0;
+    nota.textContent = ocultos
+      ? `${ocultos} producto${ocultos === 1 ? '' : 's'} de talla única no se muestra${ocultos === 1 ? '' : 'n'} con el filtro de talla.`
+      : '';
+  }
+
+  quitarFiltro(tipo, valor) {
+    const raiz = this.shadowRoot;
+    if (tipo === 'busqueda') {
+      raiz.querySelector('input[name="q"]').value = '';
+      this.estado.busqueda = '';
+      this.estado.busquedaTexto = '';
+      this.pintarProductos();
+    }
+    if (tipo === 'categoria') this.cambiarCategoria('todo');
+    if (tipo === 'precio') {
+      this.estado.precioMax = PRECIO_MAXIMO[this.estado.moneda];
+      raiz.querySelector('input[name="precio"]').value = this.estado.precioMax;
+      raiz.querySelector('.valor-precio').textContent = this.formatearPrecio(this.estado.precioMax);
+      this.pintarProductos();
+    }
+    if (tipo === 'talla') {
+      this.estado.tallas = this.estado.tallas.filter((t) => t !== valor);
+      raiz.querySelector(`.tallas [data-talla="${valor}"]`)?.setAttribute('aria-pressed', 'false');
+      this.pintarProductos();
+    }
   }
 
   // Un producto con tallas no se puede añadir hasta elegir una de ellas

@@ -211,6 +211,36 @@ export const ESTILOS = `
   .tarjeta.falta-talla { border-color: #b91c1c; }
   .tarjeta.falta-talla .selector-talla button { border-color: #b91c1c; }
 
+  /* ---------- Filtros activos ---------- */
+  .chips { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .75rem; }
+  .chips[hidden], .nota-talla[hidden] { display: none; }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .3rem .65rem;
+    border: 1px solid var(--azul-claro);
+    border-radius: 999px;
+    background: #eff6ff;
+    color: var(--azul);
+    font-size: .85rem;
+    cursor: pointer;
+  }
+  .chip:hover { background: #dbeafe; }
+  .nota-talla { margin: 0 0 .75rem; font-size: .85rem; color: #6b7280; }
+  .btn-limpiar-vacio {
+    margin-top: .5rem;
+    padding: .5rem 1rem;
+    border: 1px solid var(--azul);
+    border-radius: 6px;
+    background: white;
+    color: var(--azul);
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .vacio { grid-column: 1 / -1; }
+  .vacio p { margin: 0; }
+
   .vacio { padding: 2rem; text-align: center; color: #6b7280; }
 
   button:focus-visible, input:focus-visible, select:focus-visible {
