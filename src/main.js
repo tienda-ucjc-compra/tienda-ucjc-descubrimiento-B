@@ -11,6 +11,13 @@ const PRECIO_MAXIMO = { EUR: 60, USD: 70 };
 // Retardo (ms) de la búsqueda en vivo mientras el usuario escribe
 const RETARDO_BUSQUEDA = 250;
 
+// Tiempo (ms) que se queda visible el aviso de "producto añadido"
+const DURACION_AVISO = 4500;
+
+// Parámetros de la URL donde se guardan los filtros (con prefijo para no chocar con los del shell)
+const PARAMS_URL = ['desc_q', 'desc_cat', 'desc_pmax', 'desc_tallas', 'desc_orden', 'desc_moneda'];
+const ORDENES = ['relevancia', 'precio-asc', 'precio-desc', 'nombre'];
+
 // Minúsculas y sin tildes: "Equipación" y "equipacion" son lo mismo al buscar
 const normalizar = (texto) =>
   String(texto).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
@@ -37,6 +44,9 @@ const ESTILOS_AVISO = `
     z-index: 2000;
   }
   .aviso.visible { opacity: 1; transform: translate(-50%, 0); }
+  @media (prefers-reduced-motion: reduce) {
+    .aviso { transition: none; }
+  }
   .aviso.anadido { background: #15803d; }
 `;
 
@@ -80,6 +90,8 @@ class UcjcDescubrimiento extends HTMLElement {
     this.pintarEstructura();
     this.conectarEventos();
     this.escucharSesion();
+    this.leerUrl();
+    this.aplicarEstadoAControles();
     this.pintarProductos();
   }
 
@@ -159,7 +171,7 @@ class UcjcDescubrimiento extends HTMLElement {
               <option value="nombre">Nombre (A-Z)</option>
             </select>
           </div>
-          <div class="chips" aria-label="Filtros activos" hidden></div>
+          <div class="chips" role="group" aria-label="Filtros activos" hidden></div>
           <p class="nota-talla" hidden></p>
           <div class="rejilla"></div>
         </main>
@@ -167,7 +179,7 @@ class UcjcDescubrimiento extends HTMLElement {
 
       <div id="modal-container"></div>
 
-      <div class="aviso" role="status" aria-live="polite"></div>
+      <div class="aviso" role="status" aria-live="polite" aria-atomic="true"></div>
     `;
 
     this.actualizarBarraSesion();
@@ -458,6 +470,7 @@ class UcjcDescubrimiento extends HTMLElement {
       `${lista.length} producto${lista.length === 1 ? '' : 's'}`;
     this.pintarChips();
     this.pintarNotaTalla();
+    this.escribirUrl();
 
     raiz.querySelector('.rejilla').innerHTML = lista.length
       ? lista.map((p) => `
@@ -477,8 +490,8 @@ class UcjcDescubrimiento extends HTMLElement {
               }
               <p class="error-talla" role="alert" hidden></p>
               <div class="acciones">
-                <button class="btn-ver" data-accion="ver" data-id="${p.id}">Ver</button>
-                <button class="btn-anadir" data-accion="anadir" data-id="${p.id}">Añadir</button>
+                <button class="btn-ver" data-accion="ver" data-id="${p.id}" aria-label="Ver detalles de ${escapar(p.nombre)}">Ver</button>
+                <button class="btn-anadir" data-accion="anadir" data-id="${p.id}" aria-label="Añadir ${escapar(p.nombre)} al carrito">Añadir</button>
               </div>
             </div>
           </article>
@@ -593,13 +606,83 @@ class UcjcDescubrimiento extends HTMLElement {
     this.mostrarAviso(`Producto añadido: ${producto.nombre}${talla ? ` (talla ${talla})` : ''}, ${this.formatearPrecio(this.precioProducto(producto))}`, 'anadido');
   }
 
-  // Muestra un aviso abajo de la pantalla durante 2,5 segundos
+  // Muestra un aviso abajo de la pantalla el tiempo suficiente para leerlo
   mostrarAviso(texto, tipo) {
     const aviso = this.shadowRoot.querySelector('.aviso');
     aviso.textContent = texto;
     aviso.className = `aviso ${tipo} visible`;
     clearTimeout(this.temporizadorAviso);
-    this.temporizadorAviso = setTimeout(() => aviso.classList.remove('visible'), 2500);
+    this.temporizadorAviso = setTimeout(() => aviso.classList.remove('visible'), DURACION_AVISO);
+  }
+
+  // ---------- Filtros en la URL ----------
+  // Se guardan con el prefijo "desc_" para no pisar los parámetros del shell (?identidad=, ?datos=, ?compra=...)
+
+  leerUrl() {
+    let params;
+    try {
+      params = new URLSearchParams(window.location.search);
+    } catch {
+      return;
+    }
+    const e = this.estado;
+    const moneda = params.get('desc_moneda');
+    if (moneda && PRECIO_MAXIMO[moneda]) e.moneda = moneda;
+
+    e.precioMax = PRECIO_MAXIMO[e.moneda];
+    const precio = Number(params.get('desc_pmax'));
+    if (params.has('desc_pmax') && Number.isFinite(precio)) {
+      e.precioMax = Math.min(PRECIO_MAXIMO[e.moneda], Math.max(0, precio));
+    }
+
+    const categoria = params.get('desc_cat');
+    if (categoria && CATEGORIAS.some((c) => c.id === categoria)) e.categoria = categoria;
+
+    e.busquedaTexto = (params.get('desc_q') || '').trim();
+    e.busqueda = normalizar(e.busquedaTexto);
+
+    e.tallas = (params.get('desc_tallas') || '').split(',').filter((t) => TALLAS.includes(t));
+
+    const orden = params.get('desc_orden');
+    if (ORDENES.includes(orden)) e.orden = orden;
+  }
+
+  // Refleja el estado (por ejemplo el leído de la URL) en los controles de la pantalla
+  aplicarEstadoAControles() {
+    const raiz = this.shadowRoot;
+    const e = this.estado;
+    raiz.querySelector('input[name="q"]').value = e.busquedaTexto;
+    raiz.querySelectorAll('.navegacion button').forEach((b) =>
+      b.setAttribute('aria-current', String(b.dataset.categoria === e.categoria))
+    );
+    raiz.querySelectorAll('.selector-moneda button').forEach((b) =>
+      b.setAttribute('aria-pressed', String(b.dataset.moneda === e.moneda))
+    );
+    const rango = raiz.querySelector('input[name="precio"]');
+    rango.max = PRECIO_MAXIMO[e.moneda];
+    rango.value = e.precioMax;
+    raiz.querySelector('.valor-precio').textContent = this.formatearPrecio(e.precioMax);
+    raiz.querySelectorAll('.tallas button').forEach((b) =>
+      b.setAttribute('aria-pressed', String(e.tallas.includes(b.dataset.talla)))
+    );
+    raiz.querySelector('select[name="orden"]').value = e.orden;
+  }
+
+  escribirUrl() {
+    try {
+      const e = this.estado;
+      const url = new URL(window.location.href);
+      PARAMS_URL.forEach((k) => url.searchParams.delete(k));
+      if (e.busquedaTexto) url.searchParams.set('desc_q', e.busquedaTexto);
+      if (e.categoria !== 'todo') url.searchParams.set('desc_cat', e.categoria);
+      if (e.precioMax < PRECIO_MAXIMO[e.moneda]) url.searchParams.set('desc_pmax', String(e.precioMax));
+      if (e.tallas.length) url.searchParams.set('desc_tallas', e.tallas.join(','));
+      if (e.orden !== 'relevancia') url.searchParams.set('desc_orden', e.orden);
+      if (e.moneda !== 'EUR') url.searchParams.set('desc_moneda', e.moneda);
+      window.history.replaceState(window.history.state, '', url);
+    } catch {
+      // En algunos contenedores (iframes, vistas previas) el historial no se puede tocar: no pasa nada
+    }
   }
 }
 
