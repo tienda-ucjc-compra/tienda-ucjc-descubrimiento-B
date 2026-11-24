@@ -1,4 +1,4 @@
-// Estilos del componente. Van dentro del Shadow DOM, así no chocan con los de otros equipos[cite: 2].
+// Estilos del componente. Van dentro del Shadow DOM, así no chocan con los de otros equipos.
 export const ESTILOS = `
   :host {
     --azul: #1e3a8a;
@@ -170,6 +170,32 @@ export const ESTILOS = `
   .btn-ver { border: 1px solid var(--azul); background: white; color: var(--azul); }
   .btn-anadir { border: none; background: var(--azul); color: white; }
 
+  /* ---------- Talla en la tarjeta ---------- */
+  .selector-talla { display: flex; flex-wrap: wrap; gap: .3rem; }
+  .selector-talla button {
+    min-width: 2.2rem;
+    padding: .3rem .4rem;
+    border: 1px solid var(--borde);
+    border-radius: 4px;
+    background: white;
+    font-size: .8rem;
+    cursor: pointer;
+  }
+  .selector-talla button[aria-pressed="true"] {
+    background: var(--azul);
+    border-color: var(--azul);
+    color: white;
+  }
+  .error-talla {
+    margin: 0;
+    font-size: .85rem;
+    font-weight: 600;
+    color: #b91c1c;
+  }
+  .error-talla[hidden] { display: none; }
+  .tarjeta.falta-talla { border-color: #b91c1c; }
+  .tarjeta.falta-talla .selector-talla button { border-color: #b91c1c; }
+
   .vacio { padding: 2rem; text-align: center; color: #6b7280; }
 
   button:focus-visible, input:focus-visible, select:focus-visible {
@@ -232,51 +258,10 @@ export const ESTILOS = `
     font-weight: 600;
   }
 
-  /* ---------- Estilos de Administración / Roles ---------- */
-  .barra-admin {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+  /* ---------- Barra de sesión ---------- */
+  .barra-sesion {
     background: #eff6ff;
     padding: 0.75rem 1rem;
     border-bottom: 1px solid var(--borde);
-  }
-
-  .btn-admin {
-    background: var(--azul-claro);
-    color: white;
-    border: none;
-    padding: 0.5rem 1rem;
-    border-radius: 6px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-
-  .acciones-tarjeta-admin {
-    display: flex;
-    gap: 0.25rem;
-    margin-top: 0.5rem;
-  }
-
-  .btn-editar {
-    background: #f59e0b;
-    color: white;
-    border: none;
-    padding: 0.4rem;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.8rem;
-    flex: 1;
-  }
-
-  .btn-eliminar {
-    background: #ef4444;
-    color: white;
-    border: none;
-    padding: 0.4rem;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.8rem;
-    flex: 1;
   }
 `;

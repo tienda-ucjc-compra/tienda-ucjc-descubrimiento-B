@@ -14,7 +14,7 @@ const RETARDO_BUSQUEDA = 250;
 const normalizar = (texto) =>
   String(texto).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 
-// Estilos del aviso de "producto añadido / eliminado"
+// Estilos del aviso de "producto añadido"
 const ESTILOS_AVISO = `
   .aviso {
     position: fixed;
@@ -33,7 +33,6 @@ const ESTILOS_AVISO = `
   }
   .aviso.visible { opacity: 1; transform: translate(-50%, 0); }
   .aviso.anadido { background: #15803d; }
-  .aviso.eliminado { background: #b91c1c; }
 `;
 
 class UcjcDescubrimiento extends HTMLElement {
@@ -53,8 +52,9 @@ class UcjcDescubrimiento extends HTMLElement {
       orden: 'relevancia',
       productoSeleccionado: null,
       usuarioActivo: null,
-      esAdmin: false,
       listaProductos: PRODUCTOS.map(p => ({ ...p, tallas: [...p.tallas] })),
+      // Talla elegida en cada tarjeta antes de añadir: { [productoId]: 'M' }
+      tallaElegida: {},
     };
   }
 
@@ -79,10 +79,7 @@ class UcjcDescubrimiento extends HTMLElement {
     window.addEventListener(EVENTO_SESION_CAMBIADA, (e) => {
       const { autenticado = false, usuario = null } = e.detail || {};
       this.estado.usuarioActivo = autenticado && usuario ? usuario : null;
-      // En @1 los roles NO viajan por el bus (lo dice el contrato), así que no sabemos si es admin.
-      this.estado.esAdmin = false;
-
-      this.actualizarBarraAdmin();
+      this.actualizarBarraSesion();
       this.pintarProductos();
     });
   }
@@ -109,7 +106,7 @@ class UcjcDescubrimiento extends HTMLElement {
         <button type="button" data-moneda="EUR" aria-pressed="true">€ EUR</button>
         <button type="button" data-moneda="USD" aria-pressed="false">$ USD</button>
       </div>
-      <div id="admin-bar-container"></div>
+      <div id="sesion-container"></div>
 
       <nav class="navegacion" aria-label="Categorías">
         <button data-categoria="todo" aria-current="true">Todo</button>
@@ -157,30 +154,18 @@ class UcjcDescubrimiento extends HTMLElement {
       <div class="aviso" role="status" aria-live="polite"></div>
     `;
 
-    this.actualizarBarraAdmin();
+    this.actualizarBarraSesion();
     this.actualizarModal();
   }
 
-  actualizarBarraAdmin() {
-    const contenedorAdmin = this.shadowRoot.querySelector('#admin-bar-container');
+  actualizarBarraSesion() {
+    const contenedor = this.shadowRoot.querySelector('#sesion-container');
     const usuario = this.estado.usuarioActivo;
-
-    if (!this.estado.esAdmin) {
-      // Barra de sesión: así se ve que reaccionamos al iniciar y cerrar sesión
-      contenedorAdmin.innerHTML = `
-        <div class="barra-admin" role="status">
-          <span>${usuario
-            ? `👤 Sesión iniciada: ${usuario.nombre || usuario.email}`
-            : 'Navegando como invitado'}</span>
-        </div>
-      `;
-      return;
-    }
-
-    contenedorAdmin.innerHTML = `
-      <div class="barra-admin">
-        <span>⚙️ Panel de Administración activo (${usuario?.nombre || usuario?.email || 'Admin'})</span>
-        <button type="button" class="btn-admin" data-accion="nuevo-producto">+ Añadir Producto</button>
+    contenedor.innerHTML = `
+      <div class="barra-sesion" role="status">
+        <span>${usuario
+          ? `Sesión iniciada: ${usuario.nombre || usuario.email}`
+          : 'Navegando como invitado'}</span>
       </div>
     `;
   }
@@ -194,44 +179,15 @@ class UcjcDescubrimiento extends HTMLElement {
       return;
     }
 
-    const esNuevo = prod.id === 'nuevo';
-
-    // Nota: Eliminado el onclick inline para dejar que el evento suba correctamente al listener global
     contenedorModal.innerHTML = `
       <div class="modal-overlay" data-accion="cerrar">
         <div class="modal-contenido" role="dialog" aria-modal="true">
-          <h3>${esNuevo ? 'Añadir Nuevo Producto' : prod.nombre}</h3>
-          ${
-            this.estado.esAdmin && (esNuevo || prod.editando)
-              ? `
-                <form id="form-producto" style="display: flex; flex-direction: column; gap: 0.75rem;">
-                  <label>Nombre: <input type="text" name="nombre" value="${esNuevo ? '' : prod.nombre}" required style="width:100%; padding:0.4rem;" /></label>
-                  <label>Precio (€): <input type="number" step="0.01" name="precioEUR" value="${esNuevo ? '' : prod.precioEUR}" required style="width:100%; padding:0.4rem;" /></label>
-                  <label>Precio ($): <input type="number" min="0" step="0.01" name="precioUSD" value="${esNuevo ? '' : prod.precioUSD}" required style="width:100%; padding:0.4rem;" /></label>
-                  <label>Categoría: 
-                    <select name="categoria" style="width:100%; padding:0.4rem;">
-                      ${CATEGORIAS.map((c) => `<option value="${c.id}" ${prod.categoria === c.id ? 'selected' : ''}>${c.nombre}</option>`).join('')}
-                    </select>
-                  </label>
-                  <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-                    <button type="submit" class="btn-admin" style="flex:1;">Guardar</button>
-                    <button type="button" class="btn-cerrar-modal" data-accion="cerrar" style="flex:1; margin-top:0;">Cancelar</button>
-                  </div>
-                </form>
-              `
-              : `
-                <p class="precio">${this.formatearPrecio(this.precioProducto(prod))}</p>
-                <p><strong>Categoría:</strong> ${prod.categoria}</p>
-                <p><strong>Tallas disponibles:</strong> ${prod.tallas.length > 0 ? prod.tallas.join(', ') : 'Única'}</p>
-                <p>Vista detallada del producto dentro del micro-frontend de Descubrimiento.</p>
-                ${
-                  this.estado.esAdmin
-                    ? `<button type="button" class="btn-admin" data-accion="pasar-a-editar" style="margin-top:0.5rem;">Modificar / Editar este producto</button>`
-                    : ''
-                }
-                <button type="button" class="btn-cerrar-modal" data-accion="cerrar">Cerrar</button>
-              `
-          }
+          <h3>${prod.nombre}</h3>
+          <p class="precio">${this.formatearPrecio(this.precioProducto(prod))}</p>
+          <p><strong>Categoría:</strong> ${prod.categoria}</p>
+          <p><strong>Tallas disponibles:</strong> ${prod.tallas.length > 0 ? prod.tallas.join(', ') : 'Única'}</p>
+          <p>Vista detallada del producto dentro del micro-frontend de Descubrimiento.</p>
+          <button type="button" class="btn-cerrar-modal" data-accion="cerrar">Cerrar</button>
         </div>
       </div>
     `;
@@ -307,91 +263,36 @@ class UcjcDescubrimiento extends HTMLElement {
 
     raiz.querySelector('.limpiar').addEventListener('click', () => this.limpiarFiltros());
 
-    raiz.addEventListener('click', (e) => {
-      const btnAdmin = e.target.closest('[data-accion="nuevo-producto"]');
-      if (btnAdmin) {
-        this.estado.productoSeleccionado = { id: 'nuevo', nombre: '', precioEUR: 0, precioUSD: 0, categoria: 'ropa', tallas: [] };
-        this.actualizarModal();
-      }
-    });
-
     raiz.querySelector('.rejilla').addEventListener('click', (e) => {
       const boton = e.target.closest('button[data-accion]');
       if (!boton) return;
       const id = boton.dataset.id;
       const producto = this.estado.listaProductos.find((p) => p.id === id);
 
-      if (boton.dataset.accion === 'anadir') this.anadirAlCarrito(producto);
-      if (boton.dataset.accion === 'ver') {
-        this.estado.productoSeleccionado = { ...producto, editando: false };
-        this.actualizarModal();
-      }
-      if (boton.dataset.accion === 'editar') {
-        this.estado.productoSeleccionado = { ...producto, editando: true };
-        this.actualizarModal();
-      }
-      if (boton.dataset.accion === 'eliminar') {
-        if (confirm(`¿Estás seguro de eliminar "${producto.nombre}"?`)) {
-          this.estado.listaProductos = this.estado.listaProductos.filter((p) => p.id !== id);
-          this.pintarProductos();
-          this.mostrarAviso(`🗑️ Producto eliminado: ${producto.nombre}`, 'eliminado');
+      const tarjeta = boton.closest('.tarjeta');
+
+      if (boton.dataset.accion === 'talla') this.elegirTalla(producto, boton.dataset.talla, tarjeta);
+      if (boton.dataset.accion === 'anadir') {
+        // Si el producto tiene tallas, hay que elegir una: el aviso va en la propia tarjeta, sin ventanas emergentes
+        if (this.necesitaTalla(producto)) {
+          this.mostrarErrorTalla(tarjeta);
+          return;
         }
+        this.anadirAlCarrito(producto);
+      }
+      if (boton.dataset.accion === 'ver') {
+        this.estado.productoSeleccionado = { ...producto };
+        this.actualizarModal();
       }
     });
 
-    // Gestión limpia de eventos del modal (Cierre por botón o fondo, y edición)
+    // Cierre del modal: botón "Cerrar" o clic en el fondo sombreado
     raiz.querySelector('#modal-container').addEventListener('click', (e) => {
-      // Si hacen clic en la caja blanca de dentro del modal, no cerramos
-      if (e.target.closest('.modal-contenido') && !e.target.closest('[data-accion="cerrar"]')) {
-        // Comprobamos si es el botón de pasar a editar dentro del modal
-        const accionEditar = e.target.closest('[data-accion="pasar-a-editar"]');
-        if (accionEditar) {
-          this.estado.productoSeleccionado.editando = true;
-          this.actualizarModal();
-        }
-        return;
-      }
-
-      // En cualquier otro caso (fondo sombreado o botón con data-accion="cerrar"), cerramos el modal
+      const esFondo = e.target.classList.contains('modal-overlay');
+      const esBotonCerrar = e.target.closest('button[data-accion="cerrar"]');
+      if (!esFondo && !esBotonCerrar) return;
       this.estado.productoSeleccionado = null;
       this.actualizarModal();
-    });
-
-    raiz.querySelector('#modal-container').addEventListener('submit', (e) => {
-      e.preventDefault();
-      if (e.target.id === 'form-producto') {
-        const formData = new FormData(e.target);
-        const nombre = formData.get('nombre');
-        const precioEUR = parseFloat(formData.get('precioEUR'));
-        const precioUSD = parseFloat(formData.get('precioUSD'));
-        if (![precioEUR, precioUSD].every(p => Number.isFinite(p) && p >= 0)) return;
-        const categoria = formData.get('categoria');
-
-        if (this.estado.productoSeleccionado.id === 'nuevo') {
-          const nuevoProd = {
-            id: `prod-${Date.now()}`,
-            nombre,
-            precioEUR,
-            precioUSD,
-            categoria,
-            tallas: ['M', 'L'],
-          };
-          this.estado.listaProductos.push(nuevoProd);
-        } else {
-          const idActual = this.estado.productoSeleccionado.id;
-          const prod = this.estado.listaProductos.find((p) => p.id === idActual);
-          if (prod) {
-            prod.nombre = nombre;
-            prod.precioEUR = precioEUR;
-            prod.precioUSD = precioUSD;
-            prod.categoria = categoria;
-          }
-        }
-
-        this.estado.productoSeleccionado = null;
-        this.actualizarModal();
-        this.pintarProductos();
-      }
     });
   }
 
@@ -407,8 +308,8 @@ class UcjcDescubrimiento extends HTMLElement {
 
   limpiarFiltros() {
     clearTimeout(this.temporizadorBusqueda);
-    const { moneda, listaProductos, usuarioActivo } = this.estado;
-    this.estado = { ...this.estadoInicial(), moneda, listaProductos, usuarioActivo, precioMax: PRECIO_MAXIMO[moneda] };
+    const { moneda, listaProductos, usuarioActivo, tallaElegida } = this.estado;
+    this.estado = { ...this.estadoInicial(), moneda, listaProductos, usuarioActivo, tallaElegida, precioMax: PRECIO_MAXIMO[moneda] };
     const raiz = this.shadowRoot;
     raiz.querySelector('input[name="q"]').value = '';
     raiz.querySelector('input[name="precio"]').max = this.estado.precioMax;
@@ -456,24 +357,57 @@ class UcjcDescubrimiento extends HTMLElement {
             <div class="info">
               <h4>${p.nombre}</h4>
               <span class="precio">${this.formatearPrecio(this.precioProducto(p))}</span>
-              <div class="acciones">
-                <button class="btn-ver" data-accion="ver" data-id="${p.id}">Ver</button>
-                <button class="btn-anadir" data-accion="anadir" data-id="${p.id}">Añadir</button>
-              </div>
               ${
-                this.estado.esAdmin
+                p.tallas.length
                   ? `
-                    <div class="acciones-tarjeta-admin">
-                      <button class="btn-editar" data-accion="editar" data-id="${p.id}">Editar</button>
-                      <button class="btn-eliminar" data-accion="eliminar" data-id="${p.id}">Eliminar</button>
+                    <div class="selector-talla" role="group" aria-label="Talla de ${p.nombre}">
+                      ${p.tallas.map((t) => `<button type="button" data-accion="talla" data-id="${p.id}" data-talla="${t}" aria-pressed="${this.estado.tallaElegida[p.id] === t}">${t}</button>`).join('')}
                     </div>
                   `
                   : ''
               }
+              <p class="error-talla" role="alert" hidden></p>
+              <div class="acciones">
+                <button class="btn-ver" data-accion="ver" data-id="${p.id}">Ver</button>
+                <button class="btn-anadir" data-accion="anadir" data-id="${p.id}">Añadir</button>
+              </div>
             </div>
           </article>
         `).join('')
       : `<p class="vacio">No hay productos con estos filtros.</p>`;
+  }
+
+  // Un producto con tallas no se puede añadir hasta elegir una de ellas
+  necesitaTalla(producto) {
+    if (!producto.tallas.length) return false;
+    return !producto.tallas.includes(this.estado.tallaElegida[producto.id]);
+  }
+
+  elegirTalla(producto, talla, tarjeta) {
+    const actual = this.estado.tallaElegida[producto.id];
+    if (actual === talla) delete this.estado.tallaElegida[producto.id];
+    else this.estado.tallaElegida[producto.id] = talla;
+
+    const elegida = this.estado.tallaElegida[producto.id];
+    tarjeta.querySelectorAll('[data-accion="talla"]').forEach((b) =>
+      b.setAttribute('aria-pressed', String(b.dataset.talla === elegida))
+    );
+    this.ocultarErrorTalla(tarjeta);
+  }
+
+  mostrarErrorTalla(tarjeta) {
+    tarjeta.classList.add('falta-talla');
+    const mensaje = tarjeta.querySelector('.error-talla');
+    mensaje.textContent = 'Selecciona una talla';
+    mensaje.hidden = false;
+    tarjeta.querySelector('[data-accion="talla"]')?.focus();
+  }
+
+  ocultarErrorTalla(tarjeta) {
+    tarjeta.classList.remove('falta-talla');
+    const mensaje = tarjeta.querySelector('.error-talla');
+    mensaje.textContent = '';
+    mensaje.hidden = true;
   }
 
   // Contrato ucjc:descubrimiento:anadir-al-carrito@1 (emisor: Descubrimiento, consumidor: Compra).
@@ -487,8 +421,8 @@ class UcjcDescubrimiento extends HTMLElement {
         cantidad: 1,
       },
     }));
-    console.log(`Emitido ${EVENTO_ANADIR_AL_CARRITO} 🛒`, producto.nombre);
-    this.mostrarAviso(`✅ Producto añadido: ${producto.nombre} — ${this.formatearPrecio(this.precioProducto(producto))}`, 'anadido');
+    const talla = this.estado.tallaElegida[producto.id];
+    this.mostrarAviso(`Producto añadido: ${producto.nombre}${talla ? ` (talla ${talla})` : ''}, ${this.formatearPrecio(this.precioProducto(producto))}`, 'anadido');
   }
 
   // Muestra un aviso abajo de la pantalla durante 2,5 segundos
