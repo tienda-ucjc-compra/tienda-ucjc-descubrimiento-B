@@ -133,13 +133,6 @@ class UcjcDescubrimiento extends HTMLElement {
       <div class="cuerpo">
         <aside class="filtros" aria-label="Filtros">
           <section>
-            <h3>Categoría</h3>
-            ${CATEGORIAS.map((c) => `
-              <label><input type="radio" name="categoria" value="${c.id}" /> ${c.nombre}</label>
-            `).join('')}
-            <label><input type="radio" name="categoria" value="todo" checked /> Todas</label>
-          </section>
-          <section>
             <h3>Precio máximo: <span class="valor-precio">${this.formatearPrecio(this.estado.precioMax)}</span></h3>
             <input type="range" name="precio" min="0" max="${PRECIO_MAXIMO.EUR}" step="5" value="${PRECIO_MAXIMO.EUR}" aria-label="Precio máximo" />
           </section>
@@ -276,14 +269,19 @@ class UcjcDescubrimiento extends HTMLElement {
 
     raiz.querySelector('.selector-moneda').addEventListener('click', (e) => {
       const boton = e.target.closest('button[data-moneda]');
-      if (!boton) return;
+      if (!boton || boton.dataset.moneda === this.estado.moneda) return;
+      // El filtro de precio conserva su posición relativa: si estaba a media escala, sigue a media escala
+      const proporcion = this.estado.precioMax / PRECIO_MAXIMO[this.estado.moneda];
       this.estado.moneda = boton.dataset.moneda;
-      this.estado.precioMax = PRECIO_MAXIMO[this.estado.moneda];
+      const maximoNuevo = PRECIO_MAXIMO[this.estado.moneda];
+      this.estado.precioMax = proporcion >= 1
+        ? maximoNuevo
+        : Math.min(maximoNuevo, Math.round((proporcion * maximoNuevo) / 5) * 5);
       raiz.querySelectorAll('.selector-moneda button').forEach((b) =>
         b.setAttribute('aria-pressed', String(b.dataset.moneda === this.estado.moneda))
       );
       const rango = raiz.querySelector('input[name="precio"]');
-      rango.max = this.estado.precioMax;
+      rango.max = maximoNuevo;
       rango.value = this.estado.precioMax;
       raiz.querySelector('.valor-precio').textContent = this.formatearPrecio(this.estado.precioMax);
       this.pintarProductos();
@@ -311,10 +309,6 @@ class UcjcDescubrimiento extends HTMLElement {
       const boton = e.target.closest('[data-categoria]');
       if (boton) this.cambiarCategoria(boton.dataset.categoria);
     });
-
-    raiz.querySelectorAll('input[name="categoria"]').forEach((radio) =>
-      radio.addEventListener('change', () => this.cambiarCategoria(radio.value))
-    );
 
     raiz.querySelector('input[name="precio"]').addEventListener('input', (e) => {
       this.estado.precioMax = Number(e.target.value);
@@ -388,7 +382,6 @@ class UcjcDescubrimiento extends HTMLElement {
     raiz.querySelectorAll('.navegacion button').forEach((b) =>
       b.setAttribute('aria-current', String(b.dataset.categoria === categoria))
     );
-    raiz.querySelector(`input[name="categoria"][value="${categoria}"]`).checked = true;
     this.pintarProductos();
   }
 
