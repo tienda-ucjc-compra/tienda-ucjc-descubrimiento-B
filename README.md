@@ -55,7 +55,10 @@ npm run preview
 ```
 
 La compilación genera la carpeta `dist`.
-El módulo de integración es `dist/remote.js`.
+El módulo de integración es `dist/remote.js`: un módulo ES que registra
+`ucjc-descubrimiento` y exporta por defecto `{ nombre, version }`, como pide el
+contrato de carga del shell. La versión la pone el workflow de despliegue
+(`VITE_APP_VERSION`); en local es `dev`.
 
 La página de demostración de `public/index.html` se copia a `dist`
 durante la compilación y permite comprobar el catálogo publicado.
@@ -66,14 +69,14 @@ Cargar el módulo e incluir el Custom Element apuntando a la última versión o 
 
 ```html
 <ucjc-descubrimiento></ucjc-descubrimiento>
-<script type="module" src="https://dani84mol.github.io/tienda-ucjc-descubrimiento/remote.js"></script>
+<script type="module" src="https://tienda-ucjc-compra.github.io/tienda-ucjc-descubrimiento-B/remote.js"></script>
 ```
 
 Para fijar una versión concreta en el proyecto contenedor (recomendado para evitar cambios inesperados):
 
 ```html
 <ucjc-descubrimiento></ucjc-descubrimiento>
-<script type="module" src="https://dani84mol.github.io/tienda-ucjc-descubrimiento/v0.2.1/remote.js"></script>
+<script type="module" src="https://tienda-ucjc-compra.github.io/tienda-ucjc-descubrimiento-B/v0.1.2/remote.js"></script>
 ```
 
 ## 7. Evento emitido
@@ -98,13 +101,48 @@ Ejemplo de `detail`:
 Los campos del evento son `productoId`, `nombre`, `precio`
 y `cantidad`.
 
+El `precio` viaja siempre en euros, como fija el contrato, aunque en pantalla se
+esté viendo en dólares. Durante Black Friday es el precio ya rebajado.
+
 El componente emite la solicitud; la gestión del carrito
 corresponde al microfrontend de Compra.
+
+### Campaña Black Friday
+
+Nombre completo:
+
+`ucjc:descubrimiento:campana-cambiada@1`
+
+Se emite en `window` cuando se enciende o apaga el botón "Black Friday UCJC"
+y también al cargar la pieza, con el estado actual.
+
+```json
+{
+  "activa": true,
+  "codigo": "black-friday-2026",
+  "etiqueta": "Black Friday UCJC",
+  "momento": "2026-11-27T09:00:00.000Z"
+}
+```
+
+Los consumidores son Compra y Datos.
+
+### Evento escuchado
+
+`ucjc:identidad:sesion-cambiada@1` (emisor: Identidad). Solo se usa para mostrar
+si hay sesión iniciada; no se usan roles.
+
+### Filtros desde la URL
+
+La pieza no modifica la URL de la página. Solo la lee al cargar, para abrir el
+catálogo ya filtrado: `?desc_q=`, `desc_cat=`, `desc_pmax=`, `desc_tallas=`,
+`desc_orden=`, `desc_moneda=`, `desc_bf=1` y `desc_ofertas=1`.
 
 ## 8. Estructura
 
 - `src/main.js`: componente, interfaz y eventos.
-- `src/productos.js`: productos, categorías y tallas.
+- `src/productos.js`: productos, categorías, tallas y descuentos de Black Friday.
+- `src/iconos.js`: iconos de categoría que sirven de imagen del producto.
 - `src/estilos.js`: estilos del componente.
 - `index.html`: página de desarrollo.
 - `public/index.html`: página de demostración para publicar.
@@ -116,10 +154,10 @@ corresponde al microfrontend de Compra.
 
 El despliegue se realiza automáticamente mediante GitHub Actions sobre la rama `gh-pages`, manteniendo el historial de versiones publicadas (`keep_files: true`):
 
-- **Web (demo):** https://dani84mol.github.io/tienda-ucjc-descubrimiento/
-- **Módulo versionado (por tag):** `https://dani84mol.github.io/tienda-ucjc-descubrimiento/v<VERSION>/remote.js`
+- **Web (demo):** https://tienda-ucjc-compra.github.io/tienda-ucjc-descubrimiento-B/
+- **Módulo versionado (por tag):** `https://tienda-ucjc-compra.github.io/tienda-ucjc-descubrimiento-B/v<VERSION>/remote.js`
 
 ### Flujo de versiones
 
-1. **Incremento automático (Patch):** Cada `push` a `main` detecta la última etiqueta publicada, incrementa automáticamente el número de versión (`v0.2.1` → `v0.2.2` → `v0.2.3`...), crea el tag en el repositorio y despliega tanto la subcarpeta de la nueva versión como la raíz (`latest`) sin sobrescribir entregas anteriores.
+1. **Incremento automático (Patch):** Cada `push` a `main` detecta la última etiqueta publicada, incrementa automáticamente el número de versión (`v0.1.2` → `v0.1.3` → `v0.1.4`...), crea el tag en el repositorio y despliega tanto la subcarpeta de la nueva versión como la raíz (`latest`) sin sobrescribir entregas anteriores.
 2. **Salto de versión manual (Minor / Major):** Para iniciar una nueva serie (por ejemplo `v0.3.0`), basta con crear y subir el tag desde local (`git tag v0.3.0 && git push origin v0.3.0`), y los siguientes commits continuarán incrementando a partir de esa numeración.

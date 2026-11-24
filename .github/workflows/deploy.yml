@@ -43,6 +43,7 @@ jobs:
             NEXT_TAG="v${MAJOR}.${MINOR}.$((PATCH + 1))"
           fi
           echo "next_tag=$NEXT_TAG" >> $GITHUB_OUTPUT
+          echo "next_version=${NEXT_TAG#v}" >> $GITHUB_OUTPUT
           echo "Siguiente version a desplegar: $NEXT_TAG"
 
       - name: Install dependencies
@@ -50,7 +51,7 @@ jobs:
 
       - name: Build versionado
         env:
-          VITE_BASE_PATH: /tienda-ucjc-descubrimiento/${{ steps.version.outputs.next_tag }}/
+          VITE_APP_VERSION: ${{ steps.version.outputs.next_version }}
         run: npm run build
 
       - name: Desplegar carpeta de version en gh-pages
@@ -63,7 +64,7 @@ jobs:
 
       - name: Build raiz (latest)
         env:
-          VITE_BASE_PATH: /tienda-ucjc-descubrimiento/
+          VITE_APP_VERSION: ${{ steps.version.outputs.next_version }}
         run: npm run build
 
       - name: Desplegar en raiz de gh-pages

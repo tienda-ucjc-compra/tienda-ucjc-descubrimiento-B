@@ -1,14 +1,16 @@
 import { defineConfig } from 'vite';
 
+// Contrato de carga del shell: un único remote.js, módulo ES, con export por defecto { nombre, version }.
+// La versión llega desde el workflow de despliegue (VITE_APP_VERSION); en local queda "dev".
 export default defineConfig({
-  // Usa la variable VITE_BASE_PATH si existe, o la ruta del repo por defecto
-  base: process.env.VITE_BASE_PATH || '/tienda-ucjc-descubrimiento/',
+  define: {
+    __VERSION__: JSON.stringify(process.env.VITE_APP_VERSION || 'dev'),
+  },
   build: {
-    rollupOptions: {
-      output: {
-        // Asegura que el punto de entrada se llame exactamente remote.js
-        entryFileNames: 'remote.js',
-      },
+    lib: {
+      entry: 'src/main.js',
+      formats: ['es'],
+      fileName: () => 'remote.js',
     },
   },
 });

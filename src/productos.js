@@ -1,4 +1,5 @@
-// Datos de prueba del catálogo (más adelante vendrán de un API)
+// Datos de prueba del catálogo (más adelante vendrán de un API).
+// "descuento" es el porcentaje de rebaja durante Black Friday; los productos sin ese campo no entran en la campaña.
 export const CATEGORIAS = [
   { id: 'ropa', nombre: 'Ropa' },
   { id: 'deporte', nombre: 'Deporte' },
@@ -9,12 +10,12 @@ export const CATEGORIAS = [
 export const TALLAS = ['XS', 'S', 'M', 'L', 'XL'];
 
 export const PRODUCTOS = [
-  { id: 'prod-101', nombre: 'Camiseta Técnica UCJC', categoria: 'deporte', precioEUR: 19.99, precioUSD: 21.99, tallas: ['S', 'M', 'L', 'XL'], descripcion: 'Camiseta transpirable de secado rápido para entrenar, con el escudo de la universidad.' },
-  { id: 'prod-102', nombre: 'Sudadera con capucha', categoria: 'ropa', precioEUR: 39.95, precioUSD: 43.95, tallas: ['XS', 'S', 'M', 'L', 'XL'], descripcion: 'Sudadera de algodón con capucha y bolsillo canguro, interior suave.' },
+  { id: 'prod-101', nombre: 'Camiseta Técnica UCJC', categoria: 'deporte', precioEUR: 19.99, precioUSD: 21.99, tallas: ['S', 'M', 'L', 'XL'], descuento: 20, descripcion: 'Camiseta transpirable de secado rápido para entrenar, con el escudo de la universidad.' },
+  { id: 'prod-102', nombre: 'Sudadera con capucha', categoria: 'ropa', precioEUR: 39.95, precioUSD: 43.95, tallas: ['XS', 'S', 'M', 'L', 'XL'], descuento: 30, descripcion: 'Sudadera de algodón con capucha y bolsillo canguro, interior suave.' },
   { id: 'prod-103', nombre: 'Chaqueta cortavientos', categoria: 'ropa', precioEUR: 45.0, precioUSD: 49.50, tallas: ['M', 'L', 'XL'], descripcion: 'Chaqueta ligera y resistente al viento, con cremallera completa y capucha plegable.' },
-  { id: 'prod-104', nombre: 'Equipación oficial fútbol', categoria: 'deporte', precioEUR: 55.0, precioUSD: 60.50, tallas: ['S', 'M', 'L'], descripcion: 'Camiseta y pantalón oficiales de los equipos de fútbol de la universidad.' },
-  { id: 'prod-105', nombre: 'Mochila UCJC', categoria: 'material', precioEUR: 29.9, precioUSD: 32.89, tallas: [], descripcion: 'Mochila con compartimento acolchado para portátil y bolsillos laterales.' },
+  { id: 'prod-104', nombre: 'Equipación oficial fútbol', categoria: 'deporte', precioEUR: 55.0, precioUSD: 60.50, tallas: ['S', 'M', 'L'], descuento: 25, descripcion: 'Camiseta y pantalón oficiales de los equipos de fútbol de la universidad.' },
+  { id: 'prod-105', nombre: 'Mochila UCJC', categoria: 'material', precioEUR: 29.9, precioUSD: 32.89, tallas: [], descuento: 15, descripcion: 'Mochila con compartimento acolchado para portátil y bolsillos laterales.' },
   { id: 'prod-106', nombre: 'Cuaderno A4', categoria: 'material', precioEUR: 4.5, precioUSD: 4.95, tallas: [], descripcion: 'Cuaderno de tapa dura con 120 hojas cuadriculadas.' },
-  { id: 'prod-107', nombre: 'Taza de graduación', categoria: 'regalos', precioEUR: 9.95, precioUSD: 10.95, tallas: [], descripcion: 'Taza de cerámica con diseño conmemorativo, apta para lavavajillas.' },
+  { id: 'prod-107', nombre: 'Taza de graduación', categoria: 'regalos', precioEUR: 9.95, precioUSD: 10.95, tallas: [], descuento: 40, descripcion: 'Taza de cerámica con diseño conmemorativo, apta para lavavajillas.' },
   { id: 'prod-108', nombre: 'Llavero metálico', categoria: 'regalos', precioEUR: 5.0, precioUSD: 5.50, tallas: [], descripcion: 'Llavero de metal grabado con el escudo de la universidad.' },
 ];

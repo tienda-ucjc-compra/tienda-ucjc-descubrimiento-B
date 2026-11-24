@@ -5,6 +5,12 @@ import { imagenProducto } from './iconos.js';
 export const EVENTO_ANADIR_AL_CARRITO = 'ucjc:descubrimiento:anadir-al-carrito@1';
 // Evento que escuchamos (emisor: Identidad). Contrato firmado ucjc-identidad-sesion-cambiada@1
 export const EVENTO_SESION_CAMBIADA = 'ucjc:identidad:sesion-cambiada@1';
+// Evento que emitimos al encender o apagar Black Friday (consumidores: Compra y Datos).
+// Contrato ucjc-descubrimiento-campana-cambiada@1: solo los campos activa, codigo, etiqueta y momento.
+export const EVENTO_CAMPANA_CAMBIADA = 'ucjc:descubrimiento:campana-cambiada@1';
+
+const CAMPANA = { codigo: 'black-friday-2026', etiqueta: 'Black Friday UCJC' };
+const DESCUENTO_MAXIMO = Math.max(0, ...PRODUCTOS.map((p) => p.descuento || 0));
 
 const PRECIO_MAXIMO = { EUR: 60, USD: 70 };
 
@@ -14,8 +20,6 @@ const RETARDO_BUSQUEDA = 250;
 // Tiempo (ms) que se queda visible el aviso de "producto añadido"
 const DURACION_AVISO = 4500;
 
-// Parámetros de la URL donde se guardan los filtros (con prefijo para no chocar con los del shell)
-const PARAMS_URL = ['desc_q', 'desc_cat', 'desc_pmax', 'desc_tallas', 'desc_orden', 'desc_moneda'];
 const ORDENES = ['relevancia', 'precio-asc', 'precio-desc', 'nombre'];
 
 // Minúsculas y sin tildes: "Equipación" y "equipacion" son lo mismo al buscar
@@ -61,6 +65,8 @@ class UcjcDescubrimiento extends HTMLElement {
     return {
       busqueda: '',
       busquedaTexto: '',
+      campanaActiva: false,
+      soloOfertas: false,
       categoria: 'todo',
       precioMax: PRECIO_MAXIMO.EUR,
       moneda: 'EUR',
@@ -74,8 +80,31 @@ class UcjcDescubrimiento extends HTMLElement {
     };
   }
 
-  precioProducto(producto) {
-    return this.estado.moneda === 'USD' ? producto.precioUSD : producto.precioEUR;
+  // Precio de catálogo, sin rebaja (en la moneda elegida, o en la que se indique)
+  precioOriginal(producto, moneda = this.estado.moneda) {
+    return moneda === 'USD' ? producto.precioUSD : producto.precioEUR;
+  }
+
+  // Un producto está en oferta si la campaña está encendida y tiene descuento
+  enOferta(producto) {
+    return this.estado.campanaActiva && producto.descuento > 0;
+  }
+
+  // Precio que paga el usuario: el rebajado durante la campaña (también es el que viaja al carrito)
+  precioProducto(producto, moneda = this.estado.moneda) {
+    const base = this.precioOriginal(producto, moneda);
+    return this.enOferta(producto) ? Math.round(base * (100 - producto.descuento)) / 100 : base;
+  }
+
+  // Precio en HTML: con rebaja se ve el antiguo tachado y el nuevo
+  htmlPrecio(producto) {
+    const actual = this.formatearPrecio(this.precioProducto(producto));
+    if (!this.enOferta(producto)) return actual;
+    return `<s class="precio-antes"><span class="solo-lector">Antes </span>${this.formatearPrecio(this.precioOriginal(producto))}</s> <span class="precio-oferta"><span class="solo-lector">Ahora </span>${actual}</span>`;
+  }
+
+  insigniaOferta(producto) {
+    return this.enOferta(producto) ? `<span class="insignia-oferta">-${producto.descuento}%</span>` : '';
   }
 
   formatearPrecio(precio) {
@@ -93,6 +122,8 @@ class UcjcDescubrimiento extends HTMLElement {
     this.leerUrl();
     this.aplicarEstadoAControles();
     this.pintarProductos();
+    // Al cargar la pieza se avisa del estado actual de la campaña, como pide el contrato
+    this.emitirCampana();
   }
 
   // Al quitar el componente de la página se sueltan los listeners de window y los temporizadores
@@ -133,14 +164,22 @@ class UcjcDescubrimiento extends HTMLElement {
 
       <div class="subbarra">
         <span id="sesion-container" class="estado-sesion" role="status"></span>
-        <div class="selector-moneda" role="group" aria-label="Seleccionar moneda">
-          <span>Moneda:</span>
-          <button type="button" data-moneda="EUR" aria-pressed="true">€ EUR</button>
-          <button type="button" data-moneda="USD" aria-pressed="false">$ USD</button>
+        <div class="controles-subbarra">
+          <button type="button" class="btn-bf" aria-pressed="false">${CAMPANA.etiqueta}</button>
+          <div class="selector-moneda" role="group" aria-label="Seleccionar moneda">
+            <span>Moneda:</span>
+            <button type="button" data-moneda="EUR" aria-pressed="true">€ EUR</button>
+            <button type="button" data-moneda="USD" aria-pressed="false">$ USD</button>
+          </div>
         </div>
+      </div>
+      <div class="banner-bf" hidden>
+        <p><strong>${CAMPANA.etiqueta}</strong>: hasta -${DESCUENTO_MAXIMO}% en artículos seleccionados</p>
+        <button type="button" class="btn-ver-ofertas" aria-pressed="false">Ver ofertas</button>
       </div>
 
       <nav class="navegacion" aria-label="Categorías">
+        <button type="button" class="tab-ofertas" aria-pressed="false" hidden>Ofertas</button>
         <button data-categoria="todo" aria-current="true">Todo</button>
         ${CATEGORIAS.map((c) => `<button data-categoria="${c.id}">${c.nombre}</button>`).join('')}
       </nav>
@@ -206,9 +245,9 @@ class UcjcDescubrimiento extends HTMLElement {
     contenedorModal.innerHTML = `
       <div class="modal-overlay" data-accion="cerrar">
         <div class="modal-contenido" role="dialog" aria-modal="true" aria-labelledby="modal-titulo" tabindex="-1" data-producto="${escapar(prod.id)}">
-          <div class="imagen modal-imagen">${imagenProducto(prod, escapar)}</div>
+          <div class="imagen modal-imagen">${imagenProducto(prod, escapar)}${this.insigniaOferta(prod)}</div>
           <h3 id="modal-titulo">${escapar(prod.nombre)}</h3>
-          <p class="precio">${this.formatearPrecio(this.precioProducto(prod))}</p>
+          <p class="precio">${this.htmlPrecio(prod)}</p>
           ${prod.descripcion ? `<p class="descripcion">${escapar(prod.descripcion)}</p>` : ''}
           <p><strong>Categoría:</strong> ${escapar(this.nombreCategoria(prod.categoria))}</p>
           ${
@@ -325,6 +364,12 @@ class UcjcDescubrimiento extends HTMLElement {
       if (boton) this.cambiarCategoria(boton.dataset.categoria);
     });
 
+    // Black Friday: botón que enciende o apaga la campaña, y accesos para ver solo las ofertas
+    raiz.querySelector('.btn-bf').addEventListener('click', () => this.fijarCampana(!this.estado.campanaActiva));
+    const alternarOfertas = () => this.fijarSoloOfertas(!this.estado.soloOfertas);
+    raiz.querySelector('.tab-ofertas').addEventListener('click', alternarOfertas);
+    raiz.querySelector('.btn-ver-ofertas').addEventListener('click', alternarOfertas);
+
     raiz.querySelector('input[name="precio"]').addEventListener('input', (e) => {
       this.estado.precioMax = Number(e.target.value);
       raiz.querySelector('.valor-precio').textContent = this.formatearPrecio(this.estado.precioMax);
@@ -407,10 +452,38 @@ class UcjcDescubrimiento extends HTMLElement {
     }
   }
 
+  // Enciende o apaga Black Friday y avisa a Compra y Datos con el evento del contrato
+  fijarCampana(activa) {
+    this.estado.campanaActiva = activa;
+    if (!activa) this.estado.soloOfertas = false;
+    this.aplicarEstadoAControles();
+    this.pintarProductos();
+    this.emitirCampana();
+  }
+
+  fijarSoloOfertas(valor) {
+    this.estado.soloOfertas = this.estado.campanaActiva && valor;
+    this.aplicarEstadoAControles();
+    this.pintarProductos();
+  }
+
+  // Contrato ucjc:descubrimiento:campana-cambiada@1 (emisor: Descubrimiento, consumidores: Compra y Datos).
+  // Solo los 4 campos firmados: no añadir ni renombrar campos sin pasar por el repo de contratos.
+  emitirCampana() {
+    window.dispatchEvent(new CustomEvent(EVENTO_CAMPANA_CAMBIADA, {
+      detail: {
+        activa: this.estado.campanaActiva,
+        codigo: CAMPANA.codigo,
+        etiqueta: CAMPANA.etiqueta,
+        momento: new Date().toISOString(),
+      },
+    }));
+  }
+
   cambiarCategoria(categoria) {
     this.estado.categoria = categoria;
     const raiz = this.shadowRoot;
-    raiz.querySelectorAll('.navegacion button').forEach((b) =>
+    raiz.querySelectorAll('.navegacion [data-categoria]').forEach((b) =>
       b.setAttribute('aria-current', String(b.dataset.categoria === categoria))
     );
     this.pintarProductos();
@@ -419,8 +492,9 @@ class UcjcDescubrimiento extends HTMLElement {
   limpiarFiltros() {
     clearTimeout(this.temporizadorBusqueda);
     // Vuelve todo al estado inicial, moneda incluida (EUR); solo se conservan la sesión, el catálogo y las tallas elegidas
-    const { listaProductos, usuarioActivo, tallaElegida } = this.estado;
-    this.estado = { ...this.estadoInicial(), listaProductos, usuarioActivo, tallaElegida };
+    // (Black Friday no es un filtro: la campaña sigue encendida aunque se limpien los filtros)
+    const { listaProductos, usuarioActivo, tallaElegida, campanaActiva } = this.estado;
+    this.estado = { ...this.estadoInicial(), listaProductos, usuarioActivo, tallaElegida, campanaActiva };
     this.aplicarEstadoAControles();
     this.pintarProductos();
   }
@@ -442,6 +516,7 @@ class UcjcDescubrimiento extends HTMLElement {
   cumpleFiltros(p, ignorarTalla = false) {
     const { busqueda, categoria, precioMax, tallas } = this.estado;
     return (categoria === 'todo' || p.categoria === categoria) &&
+      (!this.estado.soloOfertas || this.enOferta(p)) &&
       this.precioProducto(p) <= precioMax &&
       (!busqueda || this.coincideBusqueda(p, busqueda)) &&
       (ignorarTalla || tallas.length === 0 || tallas.some((t) => p.tallas.includes(t)));
@@ -465,15 +540,14 @@ class UcjcDescubrimiento extends HTMLElement {
       `${lista.length} producto${lista.length === 1 ? '' : 's'}`;
     this.pintarChips();
     this.pintarNotaTalla();
-    this.escribirUrl();
 
     raiz.querySelector('.rejilla').innerHTML = lista.length
       ? lista.map((p) => `
           <article class="tarjeta" data-producto="${escapar(p.id)}">
-            <div class="imagen">${imagenProducto(p, escapar)}</div>
+            <div class="imagen">${imagenProducto(p, escapar)}${this.insigniaOferta(p)}</div>
             <div class="info">
               <h4>${escapar(p.nombre)}</h4>
-              <span class="precio">${this.formatearPrecio(this.precioProducto(p))}</span>
+              <span class="precio">${this.htmlPrecio(p)}</span>
               ${
                 p.tallas.length
                   ? `
@@ -504,6 +578,7 @@ class UcjcDescubrimiento extends HTMLElement {
     const { busquedaTexto, categoria, precioMax, tallas, moneda } = this.estado;
     const chips = [];
     if (this.estado.busqueda) chips.push({ quitar: 'busqueda', texto: `Búsqueda: ${busquedaTexto}` });
+    if (this.estado.soloOfertas) chips.push({ quitar: 'ofertas', texto: 'Solo ofertas' });
     if (categoria !== 'todo') chips.push({ quitar: 'categoria', texto: this.nombreCategoria(categoria) });
     if (precioMax < PRECIO_MAXIMO[moneda]) chips.push({ quitar: 'precio', texto: `Hasta ${this.formatearPrecio(precioMax)}` });
     tallas.forEach((t) => chips.push({ quitar: 'talla', valor: t, texto: `Talla ${t}` }));
@@ -538,6 +613,7 @@ class UcjcDescubrimiento extends HTMLElement {
       this.pintarProductos();
     }
     if (tipo === 'categoria') this.cambiarCategoria('todo');
+    if (tipo === 'ofertas') this.fijarSoloOfertas(false);
     if (tipo === 'precio') {
       this.estado.precioMax = PRECIO_MAXIMO[this.estado.moneda];
       raiz.querySelector('input[name="precio"]').value = this.estado.precioMax;
@@ -593,7 +669,9 @@ class UcjcDescubrimiento extends HTMLElement {
       detail: {
         productoId: producto.id,
         nombre: producto.nombre,
-        precio: this.precioProducto(producto),
+        // El contrato fija el precio en euros: se envía siempre en EUR (ya con la rebaja si hay campaña),
+        // aunque en pantalla se esté viendo en dólares.
+        precio: this.precioProducto(producto, 'EUR'),
         cantidad: 1,
       },
     }));
@@ -610,8 +688,10 @@ class UcjcDescubrimiento extends HTMLElement {
     this.temporizadorAviso = setTimeout(() => aviso.classList.remove('visible'), DURACION_AVISO);
   }
 
-  // ---------- Filtros en la URL ----------
-  // Se guardan con el prefijo "desc_" para no pisar los parámetros del shell (?identidad=, ?datos=, ?compra=...)
+  // ---------- Filtros iniciales desde la URL ----------
+  // Solo se LEE la URL (la pieza no modifica nada fuera de su elemento, según el contrato de carga).
+  // Sirve para abrir el catálogo ya filtrado con un enlace: ?desc_q=, desc_cat=, desc_pmax=, desc_tallas=,
+  // desc_orden=, desc_moneda=, desc_bf=1 y desc_ofertas=1. El prefijo "desc_" evita chocar con los del shell.
 
   leerUrl() {
     let params;
@@ -640,6 +720,9 @@ class UcjcDescubrimiento extends HTMLElement {
 
     const orden = params.get('desc_orden');
     if (ORDENES.includes(orden)) e.orden = orden;
+
+    e.campanaActiva = params.get('desc_bf') === '1';
+    e.soloOfertas = e.campanaActiva && params.get('desc_ofertas') === '1';
   }
 
   // Refleja el estado (por ejemplo el leído de la URL) en los controles de la pantalla
@@ -647,9 +730,16 @@ class UcjcDescubrimiento extends HTMLElement {
     const raiz = this.shadowRoot;
     const e = this.estado;
     raiz.querySelector('input[name="q"]').value = e.busquedaTexto;
-    raiz.querySelectorAll('.navegacion button').forEach((b) =>
+    raiz.querySelectorAll('.navegacion [data-categoria]').forEach((b) =>
       b.setAttribute('aria-current', String(b.dataset.categoria === e.categoria))
     );
+    raiz.querySelector('.btn-bf').setAttribute('aria-pressed', String(e.campanaActiva));
+    raiz.querySelector('.banner-bf').hidden = !e.campanaActiva;
+    raiz.querySelector('.tab-ofertas').hidden = !e.campanaActiva;
+    raiz.querySelector('.tab-ofertas').setAttribute('aria-pressed', String(e.soloOfertas));
+    const verOfertas = raiz.querySelector('.btn-ver-ofertas');
+    verOfertas.setAttribute('aria-pressed', String(e.soloOfertas));
+    verOfertas.textContent = e.soloOfertas ? 'Ver todo el catálogo' : 'Ver ofertas';
     raiz.querySelectorAll('.selector-moneda button').forEach((b) =>
       b.setAttribute('aria-pressed', String(b.dataset.moneda === e.moneda))
     );
@@ -663,22 +753,6 @@ class UcjcDescubrimiento extends HTMLElement {
     raiz.querySelector('select[name="orden"]').value = e.orden;
   }
 
-  escribirUrl() {
-    try {
-      const e = this.estado;
-      const url = new URL(window.location.href);
-      PARAMS_URL.forEach((k) => url.searchParams.delete(k));
-      if (e.busquedaTexto) url.searchParams.set('desc_q', e.busquedaTexto);
-      if (e.categoria !== 'todo') url.searchParams.set('desc_cat', e.categoria);
-      if (e.precioMax < PRECIO_MAXIMO[e.moneda]) url.searchParams.set('desc_pmax', String(e.precioMax));
-      if (e.tallas.length) url.searchParams.set('desc_tallas', e.tallas.join(','));
-      if (e.orden !== 'relevancia') url.searchParams.set('desc_orden', e.orden);
-      if (e.moneda !== 'EUR') url.searchParams.set('desc_moneda', e.moneda);
-      window.history.replaceState(window.history.state, '', url);
-    } catch {
-      // En algunos contenedores (iframes, vistas previas) el historial no se puede tocar: no pasa nada
-    }
-  }
 }
 
 if (!customElements.get('ucjc-descubrimiento')) {
@@ -688,5 +762,5 @@ if (!customElements.get('ucjc-descubrimiento')) {
 // Exportación requerida por el shell del curso
 export default {
   nombre: 'descubrimiento',
-  version: '0.2.1'
+  version: typeof __VERSION__ !== 'undefined' ? __VERSION__ : 'dev',
 };

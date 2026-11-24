@@ -67,6 +67,71 @@ export const ESTILOS = `
     border-bottom: 1px solid var(--borde);
   }
   .estado-sesion { font-size: .9rem; color: #374151; }
+  .controles-subbarra { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem 1rem; }
+
+  /* ---------- Black Friday ---------- */
+  .btn-bf {
+    padding: .5rem .85rem;
+    border: 1px solid #111827;
+    border-radius: 6px;
+    background: white;
+    color: #111827;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .btn-bf[aria-pressed="true"] { background: #111827; color: #facc15; }
+
+  .banner-bf {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .5rem 1rem;
+    padding: .75rem 1rem;
+    background: #111827;
+    color: #facc15;
+  }
+  .banner-bf[hidden], .tab-ofertas[hidden] { display: none; }
+  .banner-bf p { margin: 0; }
+  .btn-ver-ofertas {
+    padding: .45rem .9rem;
+    border: 1px solid #facc15;
+    border-radius: 6px;
+    background: transparent;
+    color: #facc15;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .btn-ver-ofertas[aria-pressed="true"] { background: #facc15; color: #111827; }
+
+  .tab-ofertas {
+    font-weight: 700;
+    color: #b91c1c;
+  }
+  .tab-ofertas[aria-pressed="true"] { border-bottom-color: #b91c1c; }
+
+  .imagen { position: relative; }
+  .insignia-oferta {
+    position: absolute;
+    top: .5rem;
+    left: .5rem;
+    padding: .2rem .5rem;
+    border-radius: 4px;
+    background: #dc2626;
+    color: white;
+    font-size: .8rem;
+    font-weight: 700;
+  }
+  .precio-antes { color: #6b7280; font-weight: 400; font-size: .9em; }
+  .precio-oferta { color: #dc2626; }
+  .solo-lector {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
   .selector-moneda { display:flex; align-items:center; gap:.5rem; }
   .selector-moneda button { padding:.5rem .85rem; border:1px solid var(--azul); border-radius:6px; background:white; color:var(--azul); cursor:pointer; font-weight:600; }
   .selector-moneda button[aria-pressed="true"] { background:var(--azul); color:white; }
