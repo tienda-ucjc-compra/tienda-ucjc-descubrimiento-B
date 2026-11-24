@@ -118,12 +118,14 @@ class UcjcDescubrimiento extends HTMLElement {
         </div>
       </header>
 
-      <div class="selector-moneda" role="group" aria-label="Seleccionar moneda">
-        <span>Moneda:</span>
-        <button type="button" data-moneda="EUR" aria-pressed="true">€ EUR</button>
-        <button type="button" data-moneda="USD" aria-pressed="false">$ USD</button>
+      <div class="subbarra">
+        <span id="sesion-container" class="estado-sesion" role="status"></span>
+        <div class="selector-moneda" role="group" aria-label="Seleccionar moneda">
+          <span>Moneda:</span>
+          <button type="button" data-moneda="EUR" aria-pressed="true">€ EUR</button>
+          <button type="button" data-moneda="USD" aria-pressed="false">$ USD</button>
+        </div>
       </div>
-      <div id="sesion-container"></div>
 
       <nav class="navegacion" aria-label="Categorías">
         <button data-categoria="todo" aria-current="true">Todo</button>
@@ -131,7 +133,8 @@ class UcjcDescubrimiento extends HTMLElement {
       </nav>
 
       <div class="cuerpo">
-        <aside class="filtros" aria-label="Filtros">
+        <button type="button" class="btn-filtros" aria-expanded="false" aria-controls="panel-filtros">Filtros</button>
+        <aside class="filtros" id="panel-filtros" aria-label="Filtros">
           <section>
             <h3>Precio máximo: <span class="valor-precio">${this.formatearPrecio(this.estado.precioMax)}</span></h3>
             <input type="range" name="precio" min="0" max="${PRECIO_MAXIMO.EUR}" step="5" value="${PRECIO_MAXIMO.EUR}" aria-label="Precio máximo" />
@@ -171,13 +174,9 @@ class UcjcDescubrimiento extends HTMLElement {
   actualizarBarraSesion() {
     const contenedor = this.shadowRoot.querySelector('#sesion-container');
     const usuario = this.estado.usuarioActivo;
-    contenedor.innerHTML = `
-      <div class="barra-sesion" role="status">
-        <span>${usuario
-          ? `Sesión iniciada: ${escapar(usuario.nombre || usuario.email)}`
-          : 'Navegando como invitado'}</span>
-      </div>
-    `;
+    contenedor.textContent = usuario
+      ? `Sesión iniciada: ${usuario.nombre || usuario.email}`
+      : 'Navegando como invitado';
   }
 
   actualizarModal() {
@@ -334,6 +333,13 @@ class UcjcDescubrimiento extends HTMLElement {
     });
 
     raiz.querySelector('.limpiar').addEventListener('click', () => this.limpiarFiltros());
+
+    // En móvil los filtros se pliegan detrás de este botón para ver antes los productos
+    const botonFiltros = raiz.querySelector('.btn-filtros');
+    botonFiltros.addEventListener('click', () => {
+      const abierto = raiz.querySelector('.filtros').classList.toggle('abierto');
+      botonFiltros.setAttribute('aria-expanded', String(abierto));
+    });
 
     raiz.querySelector('.rejilla').addEventListener('click', (e) => {
       const boton = e.target.closest('button[data-accion]');

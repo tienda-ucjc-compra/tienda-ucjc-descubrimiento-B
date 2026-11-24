@@ -56,7 +56,18 @@ export const ESTILOS = `
     cursor: pointer;
   }
 
-  .selector-moneda { display:flex; justify-content:flex-end; align-items:center; gap:.5rem; padding:.7rem 1rem; background:#eff6ff; }
+  .subbarra {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .5rem 1rem;
+    padding: .6rem 1rem;
+    background: #eff6ff;
+    border-bottom: 1px solid var(--borde);
+  }
+  .estado-sesion { font-size: .9rem; color: #374151; }
+  .selector-moneda { display:flex; align-items:center; gap:.5rem; }
   .selector-moneda button { padding:.5rem .85rem; border:1px solid var(--azul); border-radius:6px; background:white; color:var(--azul); cursor:pointer; font-weight:600; }
   .selector-moneda button[aria-pressed="true"] { background:var(--azul); color:white; }
 
@@ -208,8 +219,23 @@ export const ESTILOS = `
   }
 
   /* ---------- Móvil: los filtros pasan arriba ---------- */
+  .btn-filtros { display: none; }
+
   @media (max-width: 700px) {
-    .cuerpo { grid-template-columns: 1fr; }
+    .cuerpo { grid-template-columns: 1fr; gap: 1rem; }
+    .btn-filtros {
+      display: block;
+      padding: .6rem;
+      border: 1px solid var(--azul);
+      border-radius: 6px;
+      background: white;
+      color: var(--azul);
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-filtros[aria-expanded="true"] { background: var(--azul); color: white; }
+    .filtros { display: none; }
+    .filtros.abierto { display: flex; }
     .barra-superior { grid-template-columns: 1fr 1fr; }
     .barra-busqueda { grid-column: 1 / -1; grid-row: 2; }
   }
@@ -281,10 +307,4 @@ export const ESTILOS = `
     font-weight: 600;
   }
 
-  /* ---------- Barra de sesión ---------- */
-  .barra-sesion {
-    background: #eff6ff;
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid var(--borde);
-  }
 `;
