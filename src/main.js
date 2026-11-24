@@ -1,5 +1,6 @@
 import { CATEGORIAS, TALLAS, PRODUCTOS } from './productos.js';
 import { ESTILOS } from './estilos.js';
+import { imagenProducto } from './iconos.js';
 // Nombre del evento según el contrato (PR #2 de tienda-ucjc-contratos)
 export const EVENTO_ANADIR_AL_CARRITO = 'ucjc:descubrimiento:anadir-al-carrito@1';
 // Evento que escuchamos (emisor: Identidad). Contrato firmado ucjc-identidad-sesion-cambiada@1
@@ -67,7 +68,9 @@ class UcjcDescubrimiento extends HTMLElement {
   }
 
   formatearPrecio(precio) {
-    return new Intl.NumberFormat('es-ES', { style: 'currency', currency: this.estado.moneda }).format(precio);
+    // Cada moneda con su formato habitual: "19,99 €" y "$21.99"
+    const idioma = this.estado.moneda === 'USD' ? 'en-US' : 'es-ES';
+    return new Intl.NumberFormat(idioma, { style: 'currency', currency: this.estado.moneda }).format(precio);
   }
 
   connectedCallback() {
@@ -196,6 +199,7 @@ class UcjcDescubrimiento extends HTMLElement {
     contenedorModal.innerHTML = `
       <div class="modal-overlay" data-accion="cerrar">
         <div class="modal-contenido" role="dialog" aria-modal="true" aria-labelledby="modal-titulo" tabindex="-1" data-producto="${escapar(prod.id)}">
+          <div class="imagen modal-imagen">${imagenProducto(prod, escapar)}</div>
           <h3 id="modal-titulo">${escapar(prod.nombre)}</h3>
           <p class="precio">${this.formatearPrecio(this.precioProducto(prod))}</p>
           ${prod.descripcion ? `<p class="descripcion">${escapar(prod.descripcion)}</p>` : ''}
@@ -440,7 +444,7 @@ class UcjcDescubrimiento extends HTMLElement {
     raiz.querySelector('.rejilla').innerHTML = lista.length
       ? lista.map((p) => `
           <article class="tarjeta" data-producto="${escapar(p.id)}">
-            <div class="imagen">Imagen</div>
+            <div class="imagen">${imagenProducto(p, escapar)}</div>
             <div class="info">
               <h4>${escapar(p.nombre)}</h4>
               <span class="precio">${this.formatearPrecio(this.precioProducto(p))}</span>

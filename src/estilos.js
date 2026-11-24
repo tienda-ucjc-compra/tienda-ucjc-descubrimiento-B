@@ -148,14 +148,18 @@ export const ESTILOS = `
     overflow: hidden;
     background: white;
   }
-  .tarjeta .imagen {
+  .imagen {
     aspect-ratio: 1;
     display: grid;
     place-items: center;
     background: var(--gris);
-    color: #9ca3af;
-    font-size: .85rem;
+    color: #94a3b8;
+    overflow: hidden;
   }
+  .imagen svg { width: 42%; height: auto; }
+  .imagen img { width: 100%; height: 100%; object-fit: cover; }
+  .modal-imagen { aspect-ratio: auto; height: 150px; border-radius: 8px; }
+  .modal-imagen svg { width: auto; height: 60%; }
   .tarjeta .info { padding: .75rem; display: flex; flex-direction: column; gap: .4rem; flex: 1; }
   .tarjeta h4 { margin: 0; font-size: 1rem; }
   .tarjeta .precio { font-weight: 700; color: var(--azul); }
