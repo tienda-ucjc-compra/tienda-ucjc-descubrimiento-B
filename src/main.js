@@ -418,16 +418,11 @@ class UcjcDescubrimiento extends HTMLElement {
 
   limpiarFiltros() {
     clearTimeout(this.temporizadorBusqueda);
-    const { moneda, listaProductos, usuarioActivo, tallaElegida } = this.estado;
-    this.estado = { ...this.estadoInicial(), moneda, listaProductos, usuarioActivo, tallaElegida, precioMax: PRECIO_MAXIMO[moneda] };
-    const raiz = this.shadowRoot;
-    raiz.querySelector('input[name="q"]').value = '';
-    raiz.querySelector('input[name="precio"]').max = this.estado.precioMax;
-    raiz.querySelector('input[name="precio"]').value = this.estado.precioMax;
-    raiz.querySelector('.valor-precio').textContent = this.formatearPrecio(this.estado.precioMax);
-    raiz.querySelector('select[name="orden"]').value = 'relevancia';
-    raiz.querySelectorAll('.tallas button').forEach((b) => b.setAttribute('aria-pressed', 'false'));
-    this.cambiarCategoria('todo');
+    // Vuelve todo al estado inicial, moneda incluida (EUR); solo se conservan la sesión, el catálogo y las tallas elegidas
+    const { listaProductos, usuarioActivo, tallaElegida } = this.estado;
+    this.estado = { ...this.estadoInicial(), listaProductos, usuarioActivo, tallaElegida };
+    this.aplicarEstadoAControles();
+    this.pintarProductos();
   }
 
   nombreCategoria(id) {
