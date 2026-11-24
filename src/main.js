@@ -14,6 +14,10 @@ const RETARDO_BUSQUEDA = 250;
 const normalizar = (texto) =>
   String(texto).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 
+// Escapa texto antes de meterlo en HTML, para que un nombre con "<" o comillas no rompa la página
+const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+const escapar = (texto) => String(texto).replace(/[&<>"']/g, (c) => ESCAPES[c]);
+
 // Estilos del aviso de "producto añadido"
 const ESTILOS_AVISO = `
   .aviso {
@@ -67,21 +71,31 @@ class UcjcDescubrimiento extends HTMLElement {
   }
 
   connectedCallback() {
+    // Si el shell monta el componente otra vez, la interfaz se rehace desde cero; solo se conserva la sesión
+    this.estado = { ...this.estadoInicial(), usuarioActivo: this.estado.usuarioActivo };
     this.pintarEstructura();
     this.conectarEventos();
     this.escucharSesion();
     this.pintarProductos();
   }
 
+  // Al quitar el componente de la página se sueltan los listeners de window y los temporizadores
+  disconnectedCallback() {
+    window.removeEventListener(EVENTO_SESION_CAMBIADA, this.alCambiarSesion);
+    clearTimeout(this.temporizadorBusqueda);
+    clearTimeout(this.temporizadorAviso);
+  }
+
   // Escuchar cambios de sesión del equipo de Identidad.
   // detail = { autenticado: true, usuario: { id, email, nombre? } }  o  { autenticado: false, usuario: null }
   escucharSesion() {
-    window.addEventListener(EVENTO_SESION_CAMBIADA, (e) => {
+    this.alCambiarSesion = (e) => {
       const { autenticado = false, usuario = null } = e.detail || {};
       this.estado.usuarioActivo = autenticado && usuario ? usuario : null;
       this.actualizarBarraSesion();
       this.pintarProductos();
-    });
+    };
+    window.addEventListener(EVENTO_SESION_CAMBIADA, this.alCambiarSesion);
   }
 
   pintarEstructura() {
@@ -164,7 +178,7 @@ class UcjcDescubrimiento extends HTMLElement {
     contenedor.innerHTML = `
       <div class="barra-sesion" role="status">
         <span>${usuario
-          ? `Sesión iniciada: ${usuario.nombre || usuario.email}`
+          ? `Sesión iniciada: ${escapar(usuario.nombre || usuario.email)}`
           : 'Navegando como invitado'}</span>
       </div>
     `;
@@ -182,9 +196,9 @@ class UcjcDescubrimiento extends HTMLElement {
     contenedorModal.innerHTML = `
       <div class="modal-overlay" data-accion="cerrar">
         <div class="modal-contenido" role="dialog" aria-modal="true">
-          <h3>${prod.nombre}</h3>
+          <h3>${escapar(prod.nombre)}</h3>
           <p class="precio">${this.formatearPrecio(this.precioProducto(prod))}</p>
-          <p><strong>Categoría:</strong> ${prod.categoria}</p>
+          <p><strong>Categoría:</strong> ${escapar(this.nombreCategoria(prod.categoria))}</p>
           <p><strong>Tallas disponibles:</strong> ${prod.tallas.length > 0 ? prod.tallas.join(', ') : 'Única'}</p>
           <p>Vista detallada del producto dentro del micro-frontend de Descubrimiento.</p>
           <button type="button" class="btn-cerrar-modal" data-accion="cerrar">Cerrar</button>
@@ -320,6 +334,11 @@ class UcjcDescubrimiento extends HTMLElement {
     this.cambiarCategoria('todo');
   }
 
+  nombreCategoria(id) {
+    const categoria = CATEGORIAS.find((c) => c.id === id);
+    return categoria ? categoria.nombre : id;
+  }
+
   // Busca por nombre o por nombre de categoría, sin distinguir tildes ni mayúsculas.
   // Cada palabra escrita debe aparecer en alguno de los dos textos.
   coincideBusqueda(producto, busqueda) {
@@ -355,12 +374,12 @@ class UcjcDescubrimiento extends HTMLElement {
           <article class="tarjeta">
             <div class="imagen">Imagen</div>
             <div class="info">
-              <h4>${p.nombre}</h4>
+              <h4>${escapar(p.nombre)}</h4>
               <span class="precio">${this.formatearPrecio(this.precioProducto(p))}</span>
               ${
                 p.tallas.length
                   ? `
-                    <div class="selector-talla" role="group" aria-label="Talla de ${p.nombre}">
+                    <div class="selector-talla" role="group" aria-label="Talla de ${escapar(p.nombre)}">
                       ${p.tallas.map((t) => `<button type="button" data-accion="talla" data-id="${p.id}" data-talla="${t}" aria-pressed="${this.estado.tallaElegida[p.id] === t}">${t}</button>`).join('')}
                     </div>
                   `
