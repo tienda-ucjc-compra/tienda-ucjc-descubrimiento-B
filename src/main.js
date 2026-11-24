@@ -195,16 +195,76 @@ class UcjcDescubrimiento extends HTMLElement {
 
     contenedorModal.innerHTML = `
       <div class="modal-overlay" data-accion="cerrar">
-        <div class="modal-contenido" role="dialog" aria-modal="true">
-          <h3>${escapar(prod.nombre)}</h3>
+        <div class="modal-contenido" role="dialog" aria-modal="true" aria-labelledby="modal-titulo" tabindex="-1" data-producto="${escapar(prod.id)}">
+          <h3 id="modal-titulo">${escapar(prod.nombre)}</h3>
           <p class="precio">${this.formatearPrecio(this.precioProducto(prod))}</p>
+          ${prod.descripcion ? `<p class="descripcion">${escapar(prod.descripcion)}</p>` : ''}
           <p><strong>Categoría:</strong> ${escapar(this.nombreCategoria(prod.categoria))}</p>
-          <p><strong>Tallas disponibles:</strong> ${prod.tallas.length > 0 ? prod.tallas.join(', ') : 'Única'}</p>
-          <p>Vista detallada del producto dentro del micro-frontend de Descubrimiento.</p>
-          <button type="button" class="btn-cerrar-modal" data-accion="cerrar">Cerrar</button>
+          ${
+            prod.tallas.length
+              ? `
+                <div>
+                  <strong>Talla:</strong>
+                  <div class="selector-talla" role="group" aria-label="Talla de ${escapar(prod.nombre)}">
+                    ${this.botonesTalla(prod)}
+                  </div>
+                </div>
+              `
+              : '<p><strong>Talla:</strong> única</p>'
+          }
+          <p class="error-talla" role="alert" hidden></p>
+          <div class="acciones-modal">
+            <button type="button" class="btn-anadir-modal" data-accion="anadir" data-id="${escapar(prod.id)}" aria-label="Añadir ${escapar(prod.nombre)} al carrito">Añadir al carrito</button>
+            <button type="button" class="btn-cerrar-modal" data-accion="cerrar">Cerrar</button>
+          </div>
         </div>
       </div>
     `;
+    // El foco pasa al diálogo para que el lector de pantalla lea el título y el teclado trabaje dentro
+    contenedorModal.querySelector('.modal-contenido').focus();
+  }
+
+  botonesTalla(producto) {
+    return producto.tallas.map((t) =>
+      `<button type="button" data-accion="talla" data-id="${escapar(producto.id)}" data-talla="${t}" aria-pressed="${this.estado.tallaElegida[producto.id] === t}">${t}</button>`
+    ).join('');
+  }
+
+  abrirModal(producto, disparador) {
+    this.elementoPrevio = disparador;
+    this.estado.productoSeleccionado = { ...producto };
+    this.actualizarModal();
+  }
+
+  cerrarModal() {
+    this.estado.productoSeleccionado = null;
+    this.actualizarModal();
+    // Devuelve el foco al botón que abrió la ficha, si sigue en pantalla
+    if (this.elementoPrevio && this.elementoPrevio.isConnected) this.elementoPrevio.focus();
+    this.elementoPrevio = null;
+  }
+
+  // Tab y Mayús+Tab dan la vuelta dentro de la ficha; Esc la cierra
+  teclaEnModal(e) {
+    if (!this.estado.productoSeleccionado) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      this.cerrarModal();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const modal = this.shadowRoot.querySelector('.modal-contenido');
+    const focales = [...modal.querySelectorAll('button')];
+    const primero = focales[0];
+    const ultimo = focales[focales.length - 1];
+    const activo = this.shadowRoot.activeElement;
+    if (e.shiftKey && (activo === primero || activo === modal)) {
+      e.preventDefault();
+      ultimo.focus();
+    } else if (!e.shiftKey && activo === ultimo) {
+      e.preventDefault();
+      primero.focus();
+    }
   }
 
   conectarEventos() {
@@ -280,34 +340,42 @@ class UcjcDescubrimiento extends HTMLElement {
     raiz.querySelector('.rejilla').addEventListener('click', (e) => {
       const boton = e.target.closest('button[data-accion]');
       if (!boton) return;
-      const id = boton.dataset.id;
-      const producto = this.estado.listaProductos.find((p) => p.id === id);
-
-      const tarjeta = boton.closest('.tarjeta');
-
-      if (boton.dataset.accion === 'talla') this.elegirTalla(producto, boton.dataset.talla, tarjeta);
-      if (boton.dataset.accion === 'anadir') {
-        // Si el producto tiene tallas, hay que elegir una: el aviso va en la propia tarjeta, sin ventanas emergentes
-        if (this.necesitaTalla(producto)) {
-          this.mostrarErrorTalla(tarjeta);
-          return;
-        }
-        this.anadirAlCarrito(producto);
-      }
       if (boton.dataset.accion === 'ver') {
-        this.estado.productoSeleccionado = { ...producto };
-        this.actualizarModal();
+        const producto = this.estado.listaProductos.find((p) => p.id === boton.dataset.id);
+        if (producto) this.abrirModal(producto, boton);
+        return;
       }
+      this.accionProducto(boton, boton.closest('.tarjeta'));
     });
 
-    // Cierre del modal: botón "Cerrar" o clic en el fondo sombreado
+    // Ficha de producto: elegir talla, añadir, y cerrar con el botón o el fondo sombreado
     raiz.querySelector('#modal-container').addEventListener('click', (e) => {
-      const esFondo = e.target.classList.contains('modal-overlay');
-      const esBotonCerrar = e.target.closest('button[data-accion="cerrar"]');
-      if (!esFondo && !esBotonCerrar) return;
-      this.estado.productoSeleccionado = null;
-      this.actualizarModal();
+      const boton = e.target.closest('button[data-accion]');
+      if (boton && boton.dataset.accion !== 'cerrar') {
+        this.accionProducto(boton, boton.closest('.modal-contenido'));
+        return;
+      }
+      if (boton || e.target.classList.contains('modal-overlay')) this.cerrarModal();
     });
+
+    raiz.addEventListener('keydown', (e) => this.teclaEnModal(e));
+  }
+
+  // Elegir talla o añadir al carrito, tanto desde la tarjeta como desde la ficha.
+  // Si el producto tiene tallas hay que elegir una: el aviso va en el propio recuadro, sin ventanas emergentes.
+  accionProducto(boton, ambito) {
+    const producto = this.estado.listaProductos.find((p) => p.id === boton.dataset.id);
+    if (!producto || !ambito) return;
+
+    if (boton.dataset.accion === 'talla') this.elegirTalla(producto, boton.dataset.talla);
+    if (boton.dataset.accion === 'anadir') {
+      if (this.necesitaTalla(producto)) {
+        this.mostrarErrorTalla(ambito);
+        return;
+      }
+      this.anadirAlCarrito(producto);
+      if (this.estado.productoSeleccionado) this.cerrarModal();
+    }
   }
 
   cambiarCategoria(categoria) {
@@ -371,7 +439,7 @@ class UcjcDescubrimiento extends HTMLElement {
 
     raiz.querySelector('.rejilla').innerHTML = lista.length
       ? lista.map((p) => `
-          <article class="tarjeta">
+          <article class="tarjeta" data-producto="${escapar(p.id)}">
             <div class="imagen">Imagen</div>
             <div class="info">
               <h4>${escapar(p.nombre)}</h4>
@@ -380,7 +448,7 @@ class UcjcDescubrimiento extends HTMLElement {
                 p.tallas.length
                   ? `
                     <div class="selector-talla" role="group" aria-label="Talla de ${escapar(p.nombre)}">
-                      ${p.tallas.map((t) => `<button type="button" data-accion="talla" data-id="${p.id}" data-talla="${t}" aria-pressed="${this.estado.tallaElegida[p.id] === t}">${t}</button>`).join('')}
+                      ${this.botonesTalla(p)}
                     </div>
                   `
                   : ''
@@ -402,16 +470,18 @@ class UcjcDescubrimiento extends HTMLElement {
     return !producto.tallas.includes(this.estado.tallaElegida[producto.id]);
   }
 
-  elegirTalla(producto, talla, tarjeta) {
+  // La talla elegida se refleja en todos los sitios donde se ve ese producto (tarjeta y ficha)
+  elegirTalla(producto, talla) {
     const actual = this.estado.tallaElegida[producto.id];
     if (actual === talla) delete this.estado.tallaElegida[producto.id];
     else this.estado.tallaElegida[producto.id] = talla;
 
     const elegida = this.estado.tallaElegida[producto.id];
-    tarjeta.querySelectorAll('[data-accion="talla"]').forEach((b) =>
+    const raiz = this.shadowRoot;
+    raiz.querySelectorAll(`[data-accion="talla"][data-id="${producto.id}"]`).forEach((b) =>
       b.setAttribute('aria-pressed', String(b.dataset.talla === elegida))
     );
-    this.ocultarErrorTalla(tarjeta);
+    raiz.querySelectorAll(`[data-producto="${producto.id}"]`).forEach((c) => this.ocultarErrorTalla(c));
   }
 
   mostrarErrorTalla(tarjeta) {

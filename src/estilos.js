@@ -247,6 +247,25 @@ export const ESTILOS = `
     color: var(--azul);
   }
 
+  .modal-contenido { max-height: 90vh; overflow-y: auto; outline: none; }
+  .modal-contenido p { margin: 0; }
+  .modal-contenido .descripcion { color: #4b5563; line-height: 1.5; }
+  .acciones-modal { display: flex; gap: .5rem; margin-top: .5rem; }
+  .acciones-modal button {
+    flex: 1;
+    padding: .65rem;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-anadir-modal { border: none; background: var(--azul); color: white; }
+  .acciones-modal .btn-cerrar-modal {
+    margin-top: 0;
+    border: 1px solid var(--azul);
+    background: white;
+    color: var(--azul);
+  }
+
   .btn-cerrar-modal {
     margin-top: 1rem;
     padding: 0.6rem;
