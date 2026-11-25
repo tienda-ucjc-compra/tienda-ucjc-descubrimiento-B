@@ -146,7 +146,7 @@ var s = "ucjc:descubrimiento:anadir-al-carrito@1", c = "ucjc:identidad:sesion-ca
 	">": "&gt;",
 	"\"": "&quot;",
 	"'": "&#39;"
-}, v = (e) => String(e).replace(/[&<>"']/g, (e) => _[e]), y = "\n  .aviso {\n    position: fixed;\n    bottom: 1.5rem;\n    left: 50%;\n    transform: translate(-50%, 1rem);\n    padding: .75rem 1.25rem;\n    border-radius: 8px;\n    color: white;\n    font-weight: 600;\n    box-shadow: 0 6px 20px rgba(0, 0, 0, .2);\n    opacity: 0;\n    pointer-events: none;\n    transition: opacity .25s, transform .25s;\n    z-index: 2000;\n  }\n  .aviso.visible { opacity: 1; transform: translate(-50%, 0); }\n  @media (prefers-reduced-motion: reduce) {\n    .aviso { transition: none; }\n  }\n  .aviso.anadido { background: #15803d; }\n", b = class extends HTMLElement {
+}, v = (e) => String(e).replace(/[&<>"']/g, (e) => _[e]), y = "\n  .aviso {\n    position: fixed;\n    bottom: 1.5rem;\n    left: 50%;\n    transform: translate(-50%, 1rem);\n    padding: .75rem 1.25rem;\n    border-radius: 8px;\n    color: white;\n    font-weight: 600;\n    box-shadow: 0 6px 20px rgba(0, 0, 0, .2);\n    opacity: 0;\n    pointer-events: none;\n    transition: opacity .25s, transform .25s;\n    z-index: 2000;\n  }\n  .aviso.visible { opacity: 1; transform: translate(-50%, 0); }\n  @media (prefers-reduced-motion: reduce) {\n    .aviso { transition: none; }\n  }\n  .aviso.anadido { background: #15803d; }\n", b = "\n  .tab-favoritos { color: #b91c1c; font-weight: 700; }\n  .navegacion .tab-favoritos[aria-current=\"true\"] { border-bottom-color: #b91c1c; color: #b91c1c; }\n\n  .btn-favorito {\n    position: absolute;\n    top: .5rem;\n    right: .5rem;\n    z-index: 1;\n    display: grid;\n    place-items: center;\n    width: 2.6rem;\n    height: 2.6rem;\n    border: 1px solid #e5e7eb;\n    border-radius: 50%;\n    background: white;\n    color: #374151;\n    box-shadow: 0 2px 6px rgba(0, 0, 0, .15);\n    font-size: 1.5rem;\n    cursor: pointer;\n  }\n  .btn-favorito[aria-pressed=\"true\"] {\n    background: #fff1f2;\n    border-color: #fda4af;\n    color: #be123c;\n  }\n  .btn-favorito:hover { border-color: #be123c; }\n\n  .btn-favorito-modal {\n    border: 1px solid #be123c;\n    background: white;\n    color: #be123c;\n  }\n  .btn-favorito-modal[aria-pressed=\"true\"] {\n    background: #fff1f2;\n  }\n  .aviso.error { background: #b91c1c; }\n  .aviso.favorito { background: #1e3a8a; }\n", x = class extends HTMLElement {
 	constructor() {
 		super(), this.attachShadow({ mode: "open" }), this.estado = this.estadoInicial();
 	}
@@ -156,6 +156,8 @@ var s = "ucjc:descubrimiento:anadir-al-carrito@1", c = "ucjc:identidad:sesion-ca
 			busquedaTexto: "",
 			campanaActiva: !1,
 			soloOfertas: !1,
+			soloFavoritos: !1,
+			favoritos: [],
 			categoria: "todo",
 			precioMax: f.EUR,
 			moneda: "EUR",
@@ -169,6 +171,46 @@ var s = "ucjc:descubrimiento:anadir-al-carrito@1", c = "ucjc:identidad:sesion-ca
 			})),
 			tallaElegida: {}
 		};
+	}
+	claveFavoritos() {
+		let e = this.estado.usuarioActivo?.id;
+		return e == null || !String(e).trim() ? null : `ucjc:descubrimiento-B:favoritos:${encodeURIComponent(String(e))}`;
+	}
+	cargarFavoritos() {
+		let e = this.claveFavoritos();
+		if (!e) return [];
+		try {
+			let t = JSON.parse(window.localStorage.getItem(e) || "[]"), n = new Set(this.estado.listaProductos.map((e) => e.id));
+			return Array.isArray(t) ? [...new Set(t.filter((e) => typeof e == "string" && n.has(e)))] : [];
+		} catch {
+			return [];
+		}
+	}
+	guardarFavoritos() {
+		let e = this.claveFavoritos();
+		if (e) try {
+			window.localStorage.setItem(e, JSON.stringify(this.estado.favoritos));
+		} catch {}
+	}
+	botonFavorito(e, t = !1) {
+		let n = this.estado.favoritos.includes(e.id), r = n ? "Quitar de favoritos" : "Añadir a favoritos", i = `type="button" data-accion="favorito" data-id="${v(e.id)}" aria-pressed="${n}" aria-label="${r}: ${v(e.nombre)}"`;
+		return t ? `<button class="btn-favorito-modal" ${i}>${n ? "♥ Quitar favorito" : "♡ Añadir a favoritos"}</button>` : `<button class="btn-favorito" ${i}>${n ? "♥" : "♡"}</button>`;
+	}
+	alternarFavorito(e) {
+		if (!this.claveFavoritos()) {
+			this.mostrarAviso("Inicio de sesión necesario para añadir a favoritos", "error");
+			return;
+		}
+		let t = this.estado.favoritos.includes(e.id);
+		this.estado.favoritos = t ? this.estado.favoritos.filter((t) => t !== e.id) : [...this.estado.favoritos, e.id], this.guardarFavoritos(), this.pintarProductos(), this.estado.productoSeleccionado && this.actualizarModal(), this.mostrarAviso(`${t ? "Eliminado de favoritos" : "Añadido a favoritos"}: ${e.nombre}`, "favorito");
+	}
+	mostrarFavoritos() {
+		if (!this.claveFavoritos()) {
+			this.mostrarAviso("Inicio de sesión necesario para ver tus favoritos", "error");
+			return;
+		}
+		let e = !this.estado.soloFavoritos;
+		this.estado.soloFavoritos = e, e && (this.estado.categoria = "todo", this.estado.soloOfertas = !1, this.estado.busqueda = "", this.estado.busquedaTexto = "", this.estado.precioMax = f[this.estado.moneda], this.estado.tallas = []), this.aplicarEstadoAControles(), this.pintarProductos();
 	}
 	precioOriginal(e, t = this.estado.moneda) {
 		return t === "USD" ? e.precioUSD : e.precioEUR;
@@ -198,7 +240,7 @@ var s = "ucjc:descubrimiento:anadir-al-carrito@1", c = "ucjc:identidad:sesion-ca
 		this.estado = {
 			...this.estadoInicial(),
 			usuarioActivo: this.estado.usuarioActivo
-		}, this.pintarEstructura(), this.conectarEventos(), this.escucharSesion(), this.leerUrl(), this.aplicarEstadoAControles(), this.pintarProductos(), this.emitirCampana();
+		}, this.estado.favoritos = this.cargarFavoritos(), this.pintarEstructura(), this.conectarEventos(), this.escucharSesion(), this.leerUrl(), this.aplicarEstadoAControles(), this.pintarProductos(), this.emitirCampana();
 	}
 	disconnectedCallback() {
 		window.removeEventListener(c, this.alCambiarSesion), clearTimeout(this.temporizadorBusqueda), clearTimeout(this.temporizadorAviso);
@@ -206,12 +248,12 @@ var s = "ucjc:descubrimiento:anadir-al-carrito@1", c = "ucjc:identidad:sesion-ca
 	escucharSesion() {
 		this.alCambiarSesion = (e) => {
 			let { autenticado: t = !1, usuario: n = null } = e.detail || {};
-			this.estado.usuarioActivo = t && n ? n : null, this.actualizarBarraSesion(), this.pintarProductos();
+			this.estado.usuarioActivo = t && n?.id != null && String(n.id).trim() ? n : null, this.estado.favoritos = this.cargarFavoritos(), this.estado.usuarioActivo || (this.estado.soloFavoritos = !1), this.actualizarBarraSesion(), this.aplicarEstadoAControles(), this.pintarProductos();
 		}, window.addEventListener(c, this.alCambiarSesion);
 	}
 	pintarEstructura() {
 		this.shadowRoot.innerHTML = `
-      <style>${r}${y}</style>
+      <style>${r}${y}${b}</style>
 
       <header class="barra-superior">
         <div class="lateral lateral-izq">
@@ -246,6 +288,7 @@ var s = "ucjc:descubrimiento:anadir-al-carrito@1", c = "ucjc:identidad:sesion-ca
         <button type="button" class="tab-ofertas" aria-pressed="false" hidden>Ofertas</button>
         <button data-categoria="todo" aria-current="true">Todo</button>
         ${e.map((e) => `<button data-categoria="${e.id}">${e.nombre}</button>`).join("")}
+        <button type="button" class="tab-favoritos" aria-current="false">♡ Favoritos</button>
       </nav>
 
       <div class="cuerpo">
@@ -287,7 +330,7 @@ var s = "ucjc:descubrimiento:anadir-al-carrito@1", c = "ucjc:identidad:sesion-ca
 	}
 	actualizarBarraSesion() {
 		let e = this.shadowRoot.querySelector("#sesion-container"), t = this.estado.usuarioActivo;
-		e.textContent = t ? `Sesión iniciada: ${t.nombre || t.email}` : "Navegando como invitado";
+		e.textContent = t ? `Sesión iniciada: ${t.nombre || t.email || t.id}` : "Navegando como invitado";
 	}
 	actualizarModal() {
 		let e = this.shadowRoot.querySelector("#modal-container"), t = this.estado.productoSeleccionado;
@@ -310,6 +353,7 @@ var s = "ucjc:descubrimiento:anadir-al-carrito@1", c = "ucjc:identidad:sesion-ca
           <p class="error-talla" role="alert" hidden></p>
           <div class="acciones-modal">
             <button type="button" class="btn-anadir-modal" data-accion="anadir" data-id="${v(t.id)}" aria-label="Añadir ${v(t.nombre)} al carrito">Añadir al carrito</button>
+            ${this.botonFavorito(t, !0)}
             <button type="button" class="btn-cerrar-modal" data-accion="cerrar">Cerrar</button>
           </div>
         </div>
@@ -356,7 +400,7 @@ var s = "ucjc:descubrimiento:anadir-al-carrito@1", c = "ucjc:identidad:sesion-ca
 			e.preventDefault(), n();
 		}), e.querySelector(".navegacion").addEventListener("click", (e) => {
 			let t = e.target.closest("[data-categoria]");
-			t && this.cambiarCategoria(t.dataset.categoria);
+			t && this.cambiarCategoria(t.dataset.categoria), e.target.closest(".tab-favoritos") && this.mostrarFavoritos();
 		}), e.querySelector(".btn-bf").addEventListener("click", () => this.fijarCampana(!this.estado.campanaActiva));
 		let r = () => this.fijarSoloOfertas(!this.estado.soloOfertas);
 		e.querySelector(".tab-ofertas").addEventListener("click", r), e.querySelector(".btn-ver-ofertas").addEventListener("click", r), e.querySelector("input[name=\"precio\"]").addEventListener("input", (t) => {
@@ -380,6 +424,7 @@ var s = "ucjc:descubrimiento:anadir-al-carrito@1", c = "ucjc:identidad:sesion-ca
 			let t = e.target.closest("button[data-accion]");
 			if (t) {
 				if (t.dataset.accion === "limpiar") this.limpiarFiltros();
+				else if (t.dataset.accion === "catalogo") this.cambiarCategoria("todo");
 				else if (t.dataset.accion === "ver") {
 					let e = this.estado.listaProductos.find((e) => e.id === t.dataset.id);
 					e && this.abrirModal(e, t);
@@ -392,19 +437,22 @@ var s = "ucjc:descubrimiento:anadir-al-carrito@1", c = "ucjc:identidad:sesion-ca
 	}
 	accionProducto(e, t) {
 		let n = this.estado.listaProductos.find((t) => t.id === e.dataset.id);
-		if (n && t && (e.dataset.accion === "talla" && this.elegirTalla(n, e.dataset.talla), e.dataset.accion === "anadir")) {
-			if (this.necesitaTalla(n)) {
-				this.mostrarErrorTalla(t);
-				return;
+		if (n && t) {
+			if (e.dataset.accion === "favorito") this.alternarFavorito(n);
+			else if (e.dataset.accion === "talla" && this.elegirTalla(n, e.dataset.talla), e.dataset.accion === "anadir") {
+				if (this.necesitaTalla(n)) {
+					this.mostrarErrorTalla(t);
+					return;
+				}
+				this.anadirAlCarrito(n), this.estado.productoSeleccionado && this.cerrarModal();
 			}
-			this.anadirAlCarrito(n), this.estado.productoSeleccionado && this.cerrarModal();
 		}
 	}
 	fijarCampana(e) {
 		this.estado.campanaActiva = e, e || (this.estado.soloOfertas = !1), this.aplicarEstadoAControles(), this.pintarProductos(), this.emitirCampana();
 	}
 	fijarSoloOfertas(e) {
-		this.estado.soloOfertas = this.estado.campanaActiva && e, this.aplicarEstadoAControles(), this.pintarProductos();
+		this.estado.soloFavoritos = !1, this.estado.soloOfertas = this.estado.campanaActiva && e, this.aplicarEstadoAControles(), this.pintarProductos();
 	}
 	emitirCampana() {
 		window.dispatchEvent(new CustomEvent(l, { detail: {
@@ -415,17 +463,19 @@ var s = "ucjc:descubrimiento:anadir-al-carrito@1", c = "ucjc:identidad:sesion-ca
 		} }));
 	}
 	cambiarCategoria(e) {
-		this.estado.categoria = e, this.shadowRoot.querySelectorAll(".navegacion [data-categoria]").forEach((t) => t.setAttribute("aria-current", String(t.dataset.categoria === e))), this.pintarProductos();
+		this.estado.categoria = e, this.estado.soloFavoritos = !1, this.aplicarEstadoAControles(), this.pintarProductos();
 	}
 	limpiarFiltros() {
 		clearTimeout(this.temporizadorBusqueda);
-		let { listaProductos: e, usuarioActivo: t, tallaElegida: n, campanaActiva: r } = this.estado;
+		let { listaProductos: e, usuarioActivo: t, tallaElegida: n, campanaActiva: r, favoritos: i, soloFavoritos: a } = this.estado;
 		this.estado = {
 			...this.estadoInicial(),
 			listaProductos: e,
 			usuarioActivo: t,
 			tallaElegida: n,
-			campanaActiva: r
+			campanaActiva: r,
+			favoritos: i,
+			soloFavoritos: a
 		}, this.aplicarEstadoAControles(), this.pintarProductos();
 	}
 	nombreCategoria(t) {
@@ -441,14 +491,14 @@ var s = "ucjc:descubrimiento:anadir-al-carrito@1", c = "ucjc:identidad:sesion-ca
 		return (r === "todo" || e.categoria === r) && (!this.estado.soloOfertas || this.enOferta(e)) && this.precioProducto(e) <= i && (!n || this.coincideBusqueda(e, n)) && (t || a.length === 0 || a.some((t) => e.tallas.includes(t)));
 	}
 	productosFiltrados() {
-		let { orden: e, listaProductos: t } = this.estado, n = t.filter((e) => this.cumpleFiltros(e));
+		let { orden: e, listaProductos: t } = this.estado, n = t.filter((e) => this.cumpleFiltros(e) && (!this.estado.soloFavoritos || this.estado.favoritos.includes(e.id)));
 		return e === "precio-asc" && n.sort((e, t) => this.precioProducto(e) - this.precioProducto(t)), e === "precio-desc" && n.sort((e, t) => this.precioProducto(t) - this.precioProducto(e)), e === "nombre" && n.sort((e, t) => e.nombre.localeCompare(t.nombre)), n;
 	}
 	pintarProductos() {
 		let e = this.productosFiltrados(), t = this.shadowRoot;
-		t.querySelector(".contador").textContent = `${e.length} producto${e.length === 1 ? "" : "s"}`, this.pintarChips(), this.pintarNotaTalla(), t.querySelector(".rejilla").innerHTML = e.length ? e.map((e) => `
+		t.querySelector(".contador").textContent = this.estado.soloFavoritos ? `${e.length} favorito${e.length === 1 ? "" : "s"}` : `${e.length} producto${e.length === 1 ? "" : "s"}`, this.pintarChips(), this.pintarNotaTalla(), t.querySelector(".rejilla").innerHTML = e.length ? e.map((e) => `
           <article class="tarjeta" data-producto="${v(e.id)}">
-            <div class="imagen">${o(e, v)}${this.insigniaOferta(e)}</div>
+            <div class="imagen">${o(e, v)}${this.insigniaOferta(e)}${this.botonFavorito(e)}</div>
             <div class="info">
               <h4>${v(e.nombre)}</h4>
               <span class="precio">${this.htmlPrecio(e)}</span>
@@ -464,7 +514,12 @@ var s = "ucjc:descubrimiento:anadir-al-carrito@1", c = "ucjc:identidad:sesion-ca
               </div>
             </div>
           </article>
-        `).join("") : "\n          <div class=\"vacio\">\n            <p>No hay productos con estos filtros.</p>\n            <button type=\"button\" class=\"btn-limpiar-vacio\" data-accion=\"limpiar\">Limpiar filtros</button>\n          </div>\n        ";
+        `).join("") : `
+          <div class="vacio">
+            <p>${this.estado.soloFavoritos ? this.estado.favoritos.length ? "No hay favoritos con estos filtros." : "Todavía no tienes productos favoritos." : "No hay productos con estos filtros."}</p>
+            ${this.estado.soloFavoritos && !this.estado.favoritos.length ? "<button type=\"button\" class=\"btn-limpiar-vacio\" data-accion=\"catalogo\">Ver catálogo</button>" : "<button type=\"button\" class=\"btn-limpiar-vacio\" data-accion=\"limpiar\">Limpiar filtros</button>"}
+          </div>
+        `;
 	}
 	pintarChips() {
 		let { busquedaTexto: e, categoria: t, precioMax: n, tallas: r, moneda: i } = this.estado, a = [];
@@ -550,16 +605,16 @@ var s = "ucjc:descubrimiento:anadir-al-carrito@1", c = "ucjc:identidad:sesion-ca
 	}
 	aplicarEstadoAControles() {
 		let e = this.shadowRoot, t = this.estado;
-		e.querySelector("input[name=\"q\"]").value = t.busquedaTexto, e.querySelectorAll(".navegacion [data-categoria]").forEach((e) => e.setAttribute("aria-current", String(e.dataset.categoria === t.categoria))), e.querySelector(".btn-bf").setAttribute("aria-pressed", String(t.campanaActiva)), e.querySelector(".banner-bf").hidden = !t.campanaActiva, e.querySelector(".tab-ofertas").hidden = !t.campanaActiva, e.querySelector(".tab-ofertas").setAttribute("aria-pressed", String(t.soloOfertas));
+		e.querySelector("input[name=\"q\"]").value = t.busquedaTexto, e.querySelectorAll(".navegacion [data-categoria]").forEach((e) => e.setAttribute("aria-current", String(!t.soloFavoritos && e.dataset.categoria === t.categoria))), e.querySelector(".tab-favoritos").setAttribute("aria-current", String(t.soloFavoritos)), e.querySelector(".btn-bf").setAttribute("aria-pressed", String(t.campanaActiva)), e.querySelector(".banner-bf").hidden = !t.campanaActiva, e.querySelector(".tab-ofertas").hidden = !t.campanaActiva, e.querySelector(".tab-ofertas").setAttribute("aria-pressed", String(t.soloOfertas));
 		let n = e.querySelector(".btn-ver-ofertas");
 		n.setAttribute("aria-pressed", String(t.soloOfertas)), n.textContent = t.soloOfertas ? "Ver todo el catálogo" : "Ver ofertas", e.querySelectorAll(".selector-moneda button").forEach((e) => e.setAttribute("aria-pressed", String(e.dataset.moneda === t.moneda)));
 		let r = e.querySelector("input[name=\"precio\"]");
 		r.max = f[t.moneda], r.value = t.precioMax, e.querySelector(".valor-precio").textContent = this.formatearPrecio(t.precioMax), e.querySelectorAll(".tallas button").forEach((e) => e.setAttribute("aria-pressed", String(t.tallas.includes(e.dataset.talla)))), e.querySelector("select[name=\"orden\"]").value = t.orden;
 	}
 };
-customElements.get("ucjc-descubrimiento") || customElements.define("ucjc-descubrimiento", b);
-var x = {
+customElements.get("ucjc-descubrimiento") || customElements.define("ucjc-descubrimiento", x);
+var S = {
 	nombre: "descubrimiento",
-	version: "0.1.4"
+	version: "0.1.5"
 };
-export { s as EVENTO_ANADIR_AL_CARRITO, l as EVENTO_CAMPANA_CAMBIADA, c as EVENTO_SESION_CAMBIADA, x as default };
+export { s as EVENTO_ANADIR_AL_CARRITO, l as EVENTO_CAMPANA_CAMBIADA, c as EVENTO_SESION_CAMBIADA, S as default };
