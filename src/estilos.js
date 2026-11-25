@@ -1,4 +1,5 @@
-// Estilos del componente. Van dentro del Shadow DOM, así no chocan con los de otros equipos.
+
+ // Estilos del componente. Van dentro del Shadow DOM, así no chocan con los de otros equipos.
 export const ESTILOS = `
   :host {
     --azul: #1e3a8a;
@@ -71,38 +72,68 @@ export const ESTILOS = `
 
   /* ---------- Black Friday ---------- */
   .btn-bf {
-    padding: .5rem .85rem;
-    border: 1px solid #111827;
-    border-radius: 6px;
-    background: white;
-    color: #111827;
-    font-weight: 700;
+    padding: .7rem 1.15rem;
+    border: 2px solid #d9c6ff;
+    border-radius: 10px;
+    background: linear-gradient(120deg, #15151f 0%, #35306e 55%, #764d95 100%);
+    color: #ffffff;
+    font-weight: 800;
+    font-size: .95rem;
+    letter-spacing: .5px;
     cursor: pointer;
+    box-shadow: 0 4px 12px rgba(53, 48, 110, .3);
+    transition: transform .2s, box-shadow .2s;
   }
-  .btn-bf[aria-pressed="true"] { background: #111827; color: #facc15; }
+  .btn-bf::before {
+    content: "⚡ ";
+    color: #f4d45a;
+  }
+  .btn-bf:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(53, 48, 110, .4);
+  }
+  .btn-bf[aria-pressed="true"] {
+    border-color: #f4d45a;
+    color: #f4d45a;
+  }
 
   .banner-bf {
     display: flex;
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
-    gap: .5rem 1rem;
-    padding: .75rem 1rem;
-    background: #111827;
-    color: #facc15;
+    gap: 1rem;
+    margin: .75rem 1rem;
+    padding: 1.5rem;
+    border-radius: 14px;
+    background: linear-gradient(120deg, #15151f 0%, #35306e 55%, #764d95 100%);
+    color: #ffffff;
+    box-shadow: 0 5px 18px rgba(53, 48, 110, .25);
   }
   .banner-bf[hidden], .tab-ofertas[hidden] { display: none; }
-  .banner-bf p { margin: 0; }
-  .btn-ver-ofertas {
-    padding: .45rem .9rem;
-    border: 1px solid #facc15;
-    border-radius: 6px;
-    background: transparent;
-    color: #facc15;
-    font-weight: 700;
-    cursor: pointer;
+  .banner-bf p {
+    margin: 0;
+    color: #eae1ff;
+    font-weight: 600;
   }
-  .btn-ver-ofertas[aria-pressed="true"] { background: #facc15; color: #111827; }
+  .btn-ver-ofertas {
+    padding: .75rem 1.25rem;
+    border: none;
+    border-radius: 9px;
+    background: #ffffff;
+    color: #28204d;
+    font-weight: 800;
+    cursor: pointer;
+    transition: background .2s, transform .2s;
+  }
+  .btn-ver-ofertas:hover {
+    background: #f4d45a;
+    transform: translateY(-2px);
+  }
+  .btn-ver-ofertas[aria-pressed="true"] {
+    background: #f4d45a;
+    color: #15151f;
+  }
 
   .tab-ofertas {
     font-weight: 700;
