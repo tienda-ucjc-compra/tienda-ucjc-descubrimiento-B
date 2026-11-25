@@ -54,6 +54,47 @@ const ESTILOS_AVISO = `
   .aviso.anadido { background: #15803d; }
 `;
 
+// Estilos nuevos para Favoritos. Se añaden sin modificar estilos.js.
+const ESTILOS_FAVORITOS = `
+  .tab-favoritos { color: #b91c1c; font-weight: 700; }
+  .navegacion .tab-favoritos[aria-current="true"] { border-bottom-color: #b91c1c; color: #b91c1c; }
+
+  .btn-favorito {
+    position: absolute;
+    top: .5rem;
+    right: .5rem;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    width: 2.6rem;
+    height: 2.6rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 50%;
+    background: white;
+    color: #374151;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, .15);
+    font-size: 1.5rem;
+    cursor: pointer;
+  }
+  .btn-favorito[aria-pressed="true"] {
+    background: #fff1f2;
+    border-color: #fda4af;
+    color: #be123c;
+  }
+  .btn-favorito:hover { border-color: #be123c; }
+
+  .btn-favorito-modal {
+    border: 1px solid #be123c;
+    background: white;
+    color: #be123c;
+  }
+  .btn-favorito-modal[aria-pressed="true"] {
+    background: #fff1f2;
+  }
+  .aviso.error { background: #b91c1c; }
+  .aviso.favorito { background: #1e3a8a; }
+`;
+
 class UcjcDescubrimiento extends HTMLElement {
   constructor() {
     super();
@@ -67,6 +108,8 @@ class UcjcDescubrimiento extends HTMLElement {
       busquedaTexto: '',
       campanaActiva: false,
       soloOfertas: false,
+      soloFavoritos: false,
+      favoritos: [],
       categoria: 'todo',
       precioMax: PRECIO_MAXIMO.EUR,
       moneda: 'EUR',
@@ -78,6 +121,88 @@ class UcjcDescubrimiento extends HTMLElement {
       // Talla elegida en cada tarjeta antes de añadir: { [productoId]: 'M' }
       tallaElegida: {},
     };
+  }
+
+  // Los favoritos se guardan en este navegador, separados por el id de cada usuario.
+  // No se envían eventos nuevos ni se modifica el contrato entre equipos.
+  claveFavoritos() {
+    const id = this.estado.usuarioActivo?.id;
+    if (id === undefined || id === null || !String(id).trim()) return null;
+    return `ucjc:descubrimiento-B:favoritos:${encodeURIComponent(String(id))}`;
+  }
+
+  cargarFavoritos() {
+    const clave = this.claveFavoritos();
+    if (!clave) return [];
+    try {
+      const guardados = JSON.parse(window.localStorage.getItem(clave) || '[]');
+      const idsValidos = new Set(this.estado.listaProductos.map((p) => p.id));
+      return Array.isArray(guardados)
+        ? [...new Set(guardados.filter((id) => typeof id === 'string' && idsValidos.has(id)))]
+        : [];
+    } catch {
+      // Si el navegador no permite localStorage, la tienda sigue funcionando.
+      return [];
+    }
+  }
+
+  guardarFavoritos() {
+    const clave = this.claveFavoritos();
+    if (!clave) return;
+    try {
+      window.localStorage.setItem(clave, JSON.stringify(this.estado.favoritos));
+    } catch {
+      // Los favoritos permanecen disponibles durante esta sesión de la página.
+    }
+  }
+
+  botonFavorito(producto, enModal = false) {
+    const guardado = this.estado.favoritos.includes(producto.id);
+    const accion = guardado ? 'Quitar de favoritos' : 'Añadir a favoritos';
+    const atributos = `type="button" data-accion="favorito" data-id="${escapar(producto.id)}" aria-pressed="${guardado}" aria-label="${accion}: ${escapar(producto.nombre)}"`;
+    return enModal
+      ? `<button class="btn-favorito-modal" ${atributos}>${guardado ? '♥ Quitar favorito' : '♡ Añadir a favoritos'}</button>`
+      : `<button class="btn-favorito" ${atributos}>${guardado ? '♥' : '♡'}</button>`;
+  }
+
+  alternarFavorito(producto) {
+    if (!this.claveFavoritos()) {
+      this.mostrarAviso('Inicio de sesión necesario para añadir a favoritos', 'error');
+      return;
+    }
+
+    const guardado = this.estado.favoritos.includes(producto.id);
+    this.estado.favoritos = guardado
+      ? this.estado.favoritos.filter((id) => id !== producto.id)
+      : [...this.estado.favoritos, producto.id];
+    this.guardarFavoritos();
+    this.pintarProductos();
+    if (this.estado.productoSeleccionado) this.actualizarModal();
+    this.mostrarAviso(
+      `${guardado ? 'Eliminado de favoritos' : 'Añadido a favoritos'}: ${producto.nombre}`,
+      'favorito'
+    );
+  }
+
+  mostrarFavoritos() {
+    if (!this.claveFavoritos()) {
+      this.mostrarAviso('Inicio de sesión necesario para ver tus favoritos', 'error');
+      return;
+    }
+
+    const activar = !this.estado.soloFavoritos;
+    this.estado.soloFavoritos = activar;
+    if (activar) {
+      // Abre la lista de favoritos sin que los filtros anteriores oculten productos.
+      this.estado.categoria = 'todo';
+      this.estado.soloOfertas = false;
+      this.estado.busqueda = '';
+      this.estado.busquedaTexto = '';
+      this.estado.precioMax = PRECIO_MAXIMO[this.estado.moneda];
+      this.estado.tallas = [];
+    }
+    this.aplicarEstadoAControles();
+    this.pintarProductos();
   }
 
   // Precio de catálogo, sin rebaja (en la moneda elegida, o en la que se indique)
@@ -114,8 +239,9 @@ class UcjcDescubrimiento extends HTMLElement {
   }
 
   connectedCallback() {
-    // Si el shell monta el componente otra vez, la interfaz se rehace desde cero; solo se conserva la sesión
+    // Si el shell monta el componente otra vez, la interfaz se rehace desde cero; se conserva la sesión.
     this.estado = { ...this.estadoInicial(), usuarioActivo: this.estado.usuarioActivo };
+    this.estado.favoritos = this.cargarFavoritos();
     this.pintarEstructura();
     this.conectarEventos();
     this.escucharSesion();
@@ -138,8 +264,12 @@ class UcjcDescubrimiento extends HTMLElement {
   escucharSesion() {
     this.alCambiarSesion = (e) => {
       const { autenticado = false, usuario = null } = e.detail || {};
-      this.estado.usuarioActivo = autenticado && usuario ? usuario : null;
+      this.estado.usuarioActivo = autenticado && usuario?.id != null && String(usuario.id).trim()
+        ? usuario : null;
+      this.estado.favoritos = this.cargarFavoritos();
+      if (!this.estado.usuarioActivo) this.estado.soloFavoritos = false;
       this.actualizarBarraSesion();
+      this.aplicarEstadoAControles();
       this.pintarProductos();
     };
     window.addEventListener(EVENTO_SESION_CAMBIADA, this.alCambiarSesion);
@@ -147,7 +277,7 @@ class UcjcDescubrimiento extends HTMLElement {
 
   pintarEstructura() {
     this.shadowRoot.innerHTML = `
-      <style>${ESTILOS}${ESTILOS_AVISO}</style>
+      <style>${ESTILOS}${ESTILOS_AVISO}${ESTILOS_FAVORITOS}</style>
 
       <header class="barra-superior">
         <div class="lateral lateral-izq">
@@ -182,6 +312,7 @@ class UcjcDescubrimiento extends HTMLElement {
         <button type="button" class="tab-ofertas" aria-pressed="false" hidden>Ofertas</button>
         <button data-categoria="todo" aria-current="true">Todo</button>
         ${CATEGORIAS.map((c) => `<button data-categoria="${c.id}">${c.nombre}</button>`).join('')}
+        <button type="button" class="tab-favoritos" aria-current="false">♡ Favoritos</button>
       </nav>
 
       <div class="cuerpo">
@@ -229,7 +360,7 @@ class UcjcDescubrimiento extends HTMLElement {
     const contenedor = this.shadowRoot.querySelector('#sesion-container');
     const usuario = this.estado.usuarioActivo;
     contenedor.textContent = usuario
-      ? `Sesión iniciada: ${usuario.nombre || usuario.email}`
+      ? `Sesión iniciada: ${usuario.nombre || usuario.email || usuario.id}`
       : 'Navegando como invitado';
   }
 
@@ -265,6 +396,7 @@ class UcjcDescubrimiento extends HTMLElement {
           <p class="error-talla" role="alert" hidden></p>
           <div class="acciones-modal">
             <button type="button" class="btn-anadir-modal" data-accion="anadir" data-id="${escapar(prod.id)}" aria-label="Añadir ${escapar(prod.nombre)} al carrito">Añadir al carrito</button>
+            ${this.botonFavorito(prod, true)}
             <button type="button" class="btn-cerrar-modal" data-accion="cerrar">Cerrar</button>
           </div>
         </div>
@@ -362,6 +494,7 @@ class UcjcDescubrimiento extends HTMLElement {
     raiz.querySelector('.navegacion').addEventListener('click', (e) => {
       const boton = e.target.closest('[data-categoria]');
       if (boton) this.cambiarCategoria(boton.dataset.categoria);
+      if (e.target.closest('.tab-favoritos')) this.mostrarFavoritos();
     });
 
     // Black Friday: botón que enciende o apaga la campaña, y accesos para ver solo las ofertas
@@ -414,6 +547,10 @@ class UcjcDescubrimiento extends HTMLElement {
         this.limpiarFiltros();
         return;
       }
+      if (boton.dataset.accion === 'catalogo') {
+        this.cambiarCategoria('todo');
+        return;
+      }
       if (boton.dataset.accion === 'ver') {
         const producto = this.estado.listaProductos.find((p) => p.id === boton.dataset.id);
         if (producto) this.abrirModal(producto, boton);
@@ -435,12 +572,16 @@ class UcjcDescubrimiento extends HTMLElement {
     raiz.addEventListener('keydown', (e) => this.teclaEnModal(e));
   }
 
-  // Elegir talla o añadir al carrito, tanto desde la tarjeta como desde la ficha.
+  // Elegir talla, añadir al carrito o guardar en favoritos, desde la tarjeta o la ficha.
   // Si el producto tiene tallas hay que elegir una: el aviso va en el propio recuadro, sin ventanas emergentes.
   accionProducto(boton, ambito) {
     const producto = this.estado.listaProductos.find((p) => p.id === boton.dataset.id);
     if (!producto || !ambito) return;
 
+    if (boton.dataset.accion === 'favorito') {
+      this.alternarFavorito(producto);
+      return;
+    }
     if (boton.dataset.accion === 'talla') this.elegirTalla(producto, boton.dataset.talla);
     if (boton.dataset.accion === 'anadir') {
       if (this.necesitaTalla(producto)) {
@@ -462,6 +603,7 @@ class UcjcDescubrimiento extends HTMLElement {
   }
 
   fijarSoloOfertas(valor) {
+    this.estado.soloFavoritos = false;
     this.estado.soloOfertas = this.estado.campanaActiva && valor;
     this.aplicarEstadoAControles();
     this.pintarProductos();
@@ -482,10 +624,8 @@ class UcjcDescubrimiento extends HTMLElement {
 
   cambiarCategoria(categoria) {
     this.estado.categoria = categoria;
-    const raiz = this.shadowRoot;
-    raiz.querySelectorAll('.navegacion [data-categoria]').forEach((b) =>
-      b.setAttribute('aria-current', String(b.dataset.categoria === categoria))
-    );
+    this.estado.soloFavoritos = false;
+    this.aplicarEstadoAControles();
     this.pintarProductos();
   }
 
@@ -493,8 +633,8 @@ class UcjcDescubrimiento extends HTMLElement {
     clearTimeout(this.temporizadorBusqueda);
     // Vuelve todo al estado inicial, moneda incluida (EUR); solo se conservan la sesión, el catálogo y las tallas elegidas
     // (Black Friday no es un filtro: la campaña sigue encendida aunque se limpien los filtros)
-    const { listaProductos, usuarioActivo, tallaElegida, campanaActiva } = this.estado;
-    this.estado = { ...this.estadoInicial(), listaProductos, usuarioActivo, tallaElegida, campanaActiva };
+    const { listaProductos, usuarioActivo, tallaElegida, campanaActiva, favoritos, soloFavoritos } = this.estado;
+    this.estado = { ...this.estadoInicial(), listaProductos, usuarioActivo, tallaElegida, campanaActiva, favoritos, soloFavoritos };
     this.aplicarEstadoAControles();
     this.pintarProductos();
   }
@@ -524,7 +664,9 @@ class UcjcDescubrimiento extends HTMLElement {
 
   productosFiltrados() {
     const { orden, listaProductos } = this.estado;
-    const lista = listaProductos.filter((p) => this.cumpleFiltros(p));
+    const lista = listaProductos.filter((p) =>
+      this.cumpleFiltros(p) && (!this.estado.soloFavoritos || this.estado.favoritos.includes(p.id))
+    );
 
     if (orden === 'precio-asc') lista.sort((a, b) => this.precioProducto(a) - this.precioProducto(b));
     if (orden === 'precio-desc') lista.sort((a, b) => this.precioProducto(b) - this.precioProducto(a));
@@ -536,15 +678,16 @@ class UcjcDescubrimiento extends HTMLElement {
   pintarProductos() {
     const lista = this.productosFiltrados();
     const raiz = this.shadowRoot;
-    raiz.querySelector('.contador').textContent =
-      `${lista.length} producto${lista.length === 1 ? '' : 's'}`;
+    raiz.querySelector('.contador').textContent = this.estado.soloFavoritos
+      ? `${lista.length} favorito${lista.length === 1 ? '' : 's'}`
+      : `${lista.length} producto${lista.length === 1 ? '' : 's'}`;
     this.pintarChips();
     this.pintarNotaTalla();
 
     raiz.querySelector('.rejilla').innerHTML = lista.length
       ? lista.map((p) => `
           <article class="tarjeta" data-producto="${escapar(p.id)}">
-            <div class="imagen">${imagenProducto(p, escapar)}${this.insigniaOferta(p)}</div>
+            <div class="imagen">${imagenProducto(p, escapar)}${this.insigniaOferta(p)}${this.botonFavorito(p)}</div>
             <div class="info">
               <h4>${escapar(p.nombre)}</h4>
               <span class="precio">${this.htmlPrecio(p)}</span>
@@ -567,8 +710,14 @@ class UcjcDescubrimiento extends HTMLElement {
         `).join('')
       : `
           <div class="vacio">
-            <p>No hay productos con estos filtros.</p>
-            <button type="button" class="btn-limpiar-vacio" data-accion="limpiar">Limpiar filtros</button>
+            <p>${this.estado.soloFavoritos
+              ? this.estado.favoritos.length
+                ? 'No hay favoritos con estos filtros.'
+                : 'Todavía no tienes productos favoritos.'
+              : 'No hay productos con estos filtros.'}</p>
+            ${this.estado.soloFavoritos && !this.estado.favoritos.length
+              ? '<button type="button" class="btn-limpiar-vacio" data-accion="catalogo">Ver catálogo</button>'
+              : '<button type="button" class="btn-limpiar-vacio" data-accion="limpiar">Limpiar filtros</button>'}
           </div>
         `;
   }
@@ -731,8 +880,9 @@ class UcjcDescubrimiento extends HTMLElement {
     const e = this.estado;
     raiz.querySelector('input[name="q"]').value = e.busquedaTexto;
     raiz.querySelectorAll('.navegacion [data-categoria]').forEach((b) =>
-      b.setAttribute('aria-current', String(b.dataset.categoria === e.categoria))
+      b.setAttribute('aria-current', String(!e.soloFavoritos && b.dataset.categoria === e.categoria))
     );
+    raiz.querySelector('.tab-favoritos').setAttribute('aria-current', String(e.soloFavoritos));
     raiz.querySelector('.btn-bf').setAttribute('aria-pressed', String(e.campanaActiva));
     raiz.querySelector('.banner-bf').hidden = !e.campanaActiva;
     raiz.querySelector('.tab-ofertas').hidden = !e.campanaActiva;
